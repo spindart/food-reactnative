@@ -1,0 +1,83 @@
+// Prisma schema for PostgreSQL
+// Atualize a variável de ambiente DATABASE_URL no .env para sua conexão PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Exemplo de modelo
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+  name  String
+}
+
+model Usuario {
+  id    Int    @id @default(autoincrement())
+  nome  String
+  email String @unique
+  senha String
+  role  Role
+  pedidos Pedido[] @relation("ClientePedidos")
+  estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
+}
+
+enum Role {
+  cliente
+  dono
+  admin
+}
+
+model Estabelecimento {
+  id          Int       @id @default(autoincrement())
+  nome        String
+  descricao   String
+  endereco    String
+  dono        Usuario   @relation("UsuarioEstabelecimentos", fields: [donoId], references: [id])
+  donoId      Int
+  produtos    Produto[]
+  pedidos     Pedido[]
+}
+
+model Produto {
+  id                Int       @id @default(autoincrement())
+  nome              String
+  descricao         String
+  preco             Float
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  estabelecimentoId Int
+  itensPedido       ItemPedido[]
+}
+
+model Pedido {
+  id                Int       @id @default(autoincrement())
+  cliente           Usuario   @relation("ClientePedidos", fields: [clienteId], references: [id])
+  clienteId         Int
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  estabelecimentoId Int
+  status            Status
+  createdAt         DateTime @default(now())
+  itens             ItemPedido[]
+}
+
+enum Status {
+  pendente
+  preparo
+  entregue
+  cancelado
+}
+
+model ItemPedido {
+  id            Int     @id @default(autoincrement())
+  pedido        Pedido  @relation(fields: [pedidoId], references: [id])
+  pedidoId      Int
+  produto       Produto @relation(fields: [produtoId], references: [id])
+  produtoId     Int
+  quantidade    Int
+  precoUnitario Float
+}
