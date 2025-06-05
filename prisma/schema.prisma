@@ -1,6 +1,3 @@
-// Prisma schema for PostgreSQL
-// Atualize a variável de ambiente DATABASE_URL no .env para sua conexão PostgreSQL
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,7 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Exemplo de modelo
 model User {
   id    Int    @id @default(autoincrement())
   email String @unique
@@ -18,14 +14,70 @@ model User {
 }
 
 model Usuario {
-  id    Int    @id @default(autoincrement())
-  nome  String
-  email String @unique
-  senha String
-  role  Role
-  pedidos Pedido[] @relation("ClientePedidos")
+  id               Int               @id @default(autoincrement())
+  nome             String
+  email            String            @unique
+  senha            String
+  role             Role
+  avaliacoes       Avaliacao[]
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
-  avaliacoes  Avaliacao[]
+  pedidos          Pedido[]          @relation("ClientePedidos")
+}
+
+model Estabelecimento {
+  id              Int         @id @default(autoincrement())
+  nome            String
+  descricao       String
+  endereco        String
+  donoId          Int
+  avaliacao       Float       @default(0)
+  avaliacoesCount Int         @default(0)
+  avaliacoes      Avaliacao[]
+  dono            Usuario     @relation("UsuarioEstabelecimentos", fields: [donoId], references: [id])
+  pedidos         Pedido[]
+  produtos        Produto[]
+}
+
+model Produto {
+  id                Int             @id @default(autoincrement())
+  nome              String
+  descricao         String
+  preco             Float
+  estabelecimentoId Int
+  itensPedido       ItemPedido[]
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+}
+
+model Pedido {
+  id                Int             @id @default(autoincrement())
+  clienteId         Int
+  estabelecimentoId Int
+  status            Status
+  createdAt         DateTime        @default(now())
+  itens             ItemPedido[]
+  cliente           Usuario         @relation("ClientePedidos", fields: [clienteId], references: [id])
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+}
+
+model ItemPedido {
+  id            Int     @id @default(autoincrement())
+  pedidoId      Int
+  produtoId     Int
+  quantidade    Int
+  precoUnitario Float
+  pedido        Pedido  @relation(fields: [pedidoId], references: [id])
+  produto       Produto @relation(fields: [produtoId], references: [id])
+}
+
+model Avaliacao {
+  id                Int             @id @default(autoincrement())
+  estabelecimentoId Int
+  usuarioId         Int
+  nota              Int
+  comentario        String?
+  createdAt         DateTime        @default(now())
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  usuario           Usuario         @relation(fields: [usuarioId], references: [id])
 }
 
 enum Role {
@@ -34,65 +86,9 @@ enum Role {
   admin
 }
 
-model Estabelecimento {
-  id          Int       @id @default(autoincrement())
-  nome        String
-  descricao   String
-  endereco    String
-  dono        Usuario   @relation("UsuarioEstabelecimentos", fields: [donoId], references: [id])
-  donoId      Int
-  produtos    Produto[]
-  pedidos     Pedido[]
-  avaliacao   Float     @default(0) // Média das avaliações
-  avaliacoesCount Int  @default(0) // Quantidade de avaliações
-  avaliacoes  Avaliacao[]
-}
-
-model Produto {
-  id                Int       @id @default(autoincrement())
-  nome              String
-  descricao         String
-  preco             Float
-  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
-  estabelecimentoId Int
-  itensPedido       ItemPedido[]
-}
-
-model Pedido {
-  id                Int       @id @default(autoincrement())
-  cliente           Usuario   @relation("ClientePedidos", fields: [clienteId], references: [id])
-  clienteId         Int
-  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
-  estabelecimentoId Int
-  status            Status
-  createdAt         DateTime @default(now())
-  itens             ItemPedido[]
-}
-
 enum Status {
   pendente
   preparo
   entregue
   cancelado
-}
-
-model ItemPedido {
-  id            Int     @id @default(autoincrement())
-  pedido        Pedido  @relation(fields: [pedidoId], references: [id])
-  pedidoId      Int
-  produto       Produto @relation(fields: [produtoId], references: [id])
-  produtoId     Int
-  quantidade    Int
-  precoUnitario Float
-}
-
-model Avaliacao {
-  id                Int    @id @default(autoincrement())
-  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
-  estabelecimentoId Int
-  usuario           Usuario @relation(fields: [usuarioId], references: [id])
-  usuarioId         Int
-  nota              Int
-  comentario        String?
-  createdAt         DateTime @default(now())
 }

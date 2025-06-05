@@ -19,6 +19,18 @@ class ProdutoController {
         }
         try {
             const { nome, descricao, preco, estabelecimentoId } = parse.data;
+            // Validação: só o dono do estabelecimento pode cadastrar produtos
+            const user = req.user;
+            const estabelecimento = await prisma.estabelecimento.findUnique({ where: { id: estabelecimentoId } });
+            if (!estabelecimento) {
+                res.status(404).json({ error: 'Estabelecimento não encontrado' });
+                return;
+            }
+            // @ts-ignore
+            if (!user || user.role !== 'dono' || estabelecimento.donoId !== user.id) {
+                res.status(403).json({ error: 'Apenas o dono do estabelecimento pode cadastrar produtos para ele.' });
+                return;
+            }
             const produto = await prisma.produto.create({
                 data: { nome, descricao, preco, estabelecimentoId },
             });
@@ -32,7 +44,14 @@ class ProdutoController {
     }
     static async getAll(req, res) {
         try {
-            const produtos = await prisma.produto.findMany();
+            const { estabelecimentoId } = req.query;
+            let produtos;
+            if (estabelecimentoId) {
+                produtos = await prisma.produto.findMany({ where: { estabelecimentoId: Number(estabelecimentoId) } });
+            }
+            else {
+                produtos = await prisma.produto.findMany();
+            }
             res.json(produtos);
             return;
         }

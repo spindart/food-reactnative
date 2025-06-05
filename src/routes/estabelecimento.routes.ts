@@ -23,5 +23,11 @@ router.put('/:id', authenticateJWT, validateBody(estabelecimentoSchema), async (
 router.delete('/:id', authenticateJWT, async (req, res) => {
   await EstabelecimentoController.delete(req, res);
 });
+router.post('/avaliar', authenticateJWT, async (req, res) => {
+  await EstabelecimentoController.avaliar(req, res);
+});
+router.get('/:estabelecimentoId/avaliacoes', async (req, res) => {
+  await EstabelecimentoController.getAvaliacoes(req, res);
+});
 
 export default router;
