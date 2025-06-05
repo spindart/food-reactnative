@@ -14,8 +14,6 @@ const categorias = [
   { key: 'saudavel', label: 'Saudável' },
 ];
 
-const fakeBanner = require('../assets/icon.png');
-
 const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<any>();
@@ -74,7 +72,11 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       {/* Banner do estabelecimento */}
-      <Image source={fakeBanner} style={styles.banner} />
+      {estabelecimento.imagem ? (
+        <Image source={{ uri: estabelecimento.imagem }} style={styles.banner} />
+      ) : (
+        <Image source={require('../assets/icon.png')} style={styles.banner} />
+      )}
       {/* Botão de voltar fixo */}
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Text style={styles.backButtonText}>{'<'} Voltar</Text>

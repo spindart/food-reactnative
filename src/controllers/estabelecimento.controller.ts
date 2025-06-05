@@ -89,7 +89,9 @@ export class EstabelecimentoController {
 
   static async getAll(req: Request, res: Response): Promise<void> {
     try {
-      const estabelecimentos = await prisma.estabelecimento.findMany({ include: { categorias: true } });
+      const estabelecimentos = await prisma.estabelecimento.findMany({
+        include: { categorias: true },
+      });
       res.json(estabelecimentos);
       return;
     } catch (error) {
@@ -140,7 +142,9 @@ export class EstabelecimentoController {
       }
       const estabelecimentos = await prisma.estabelecimento.findMany({
         where: { donoId: user.id },
+        include: { categorias: true, imagem: true }, // Garante que imagem seja incluída
       });
+      // Prisma já retorna o campo imagem se ele existir no schema e no banco
       res.json(estabelecimentos);
       return;
     } catch (error) {

@@ -20,5 +20,9 @@ router.put('/:id', authenticateJWT, validateBody(produtoSchema), async (req, res
 router.delete('/:id', authenticateJWT, async (req, res) => {
   await ProdutoController.delete(req, res);
 });
+// Atualiza apenas a imagem do produto
+router.patch('/:id/imagem', authenticateJWT, async (req, res) => {
+  await ProdutoController.updateImagem(req, res);
+});
 
 export default router;

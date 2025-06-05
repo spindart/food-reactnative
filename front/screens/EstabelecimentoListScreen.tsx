@@ -7,12 +7,6 @@ import { getCategorias, Categoria } from '../services/categoriaService';
 import { RootStackParamList } from '../types';
 import EvaluationForm from '../components/EvaluationForm';
 
-const fakeImages = [
-  require('../assets/icon.png'),
-  require('../assets/splash-icon.png'),
-  require('../assets/adaptive-icon.png'),
-];
-
 const EstabelecimentoListScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [estabelecimentos, setEstabelecimentos] = useState<any[]>([]);
@@ -141,10 +135,14 @@ const EstabelecimentoListScreen: React.FC = () => {
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
+        renderItem={({ item }) => (
           <TouchableOpacity activeOpacity={0.85} onPress={() => handleViewProducts(item)}>
             <View style={styles.card}>
-              <Image source={fakeImages[index % fakeImages.length]} style={styles.estabImage} />
+              {item.imagem ? (
+                <Image source={{ uri: item.imagem }} style={styles.estabImage} />
+              ) : (
+                <Image source={require('../assets/icon.png')} style={styles.estabImage} />
+              )}
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.nome}</Text>
                 <Text style={styles.description}>{item.descricao}</Text>

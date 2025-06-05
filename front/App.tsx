@@ -16,6 +16,7 @@ import ProdutosDoEstabelecimentoScreen from './screens/ProdutosDoEstabelecimento
 import EditarProdutoScreen from './screens/EditarProdutoScreen';
 import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoScreen';
 import * as Notifications from 'expo-notifications';
+import { CartProvider } from './context/CartContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -61,22 +62,24 @@ export default function App() {
   }, []);
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login">
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="Register" component={RegisterScreen} />
-        <Stack.Screen name="HomeTabs" component={MainTabs} options={{ headerShown: false }} />
-        <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Detalhes do Produto' }} />
-        <Stack.Screen name="DonoDashboard" component={DonoDashboardScreen} options={{ title: 'Painel do Dono' }} />
-        <Stack.Screen name="CadastrarEstabelecimento" component={CadastrarEstabelecimentoScreen} options={{ title: 'Cadastrar Estabelecimento' }} />
-        <Stack.Screen name="EditarEstabelecimento" component={EditarEstabelecimentoScreen} options={{ title: 'Editar Estabelecimento' }} />
-        <Stack.Screen name="CadastrarProduto" component={CadastrarProdutoScreen} options={{ title: 'Cadastrar Produto' }} />
-        <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ title: 'Produtos do Estabelecimento' }} />
-        <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
-        <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
-      </Stack.Navigator>
-      <StatusBar style="auto" />
-    </NavigationContainer>
+    <CartProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName="Login">
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+          <Stack.Screen name="HomeTabs" component={MainTabs} options={{ headerShown: false }} />
+          <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Detalhes do Produto' }} />
+          <Stack.Screen name="DonoDashboard" component={DonoDashboardScreen} options={{ title: 'Painel do Dono' }} />
+          <Stack.Screen name="CadastrarEstabelecimento" component={CadastrarEstabelecimentoScreen} options={{ title: 'Cadastrar Estabelecimento' }} />
+          <Stack.Screen name="EditarEstabelecimento" component={EditarEstabelecimentoScreen} options={{ title: 'Editar Estabelecimento' }} />
+          <Stack.Screen name="CadastrarProduto" component={CadastrarProdutoScreen} options={{ title: 'Cadastrar Produto' }} />
+          <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ title: 'Produtos do Estabelecimento' }} />
+          <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
+          <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
+        </Stack.Navigator>
+        <StatusBar style="auto" />
+      </NavigationContainer>
+    </CartProvider>
   );
 }
 

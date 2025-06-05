@@ -10,6 +10,7 @@ type Estabelecimento = {
   tempoEntregaMax?: number;
   taxaEntrega?: number;
   categorias?: Categoria[];
+  imagem?: string;
 };
 
 export const getAllEstabelecimentos = async () => {
