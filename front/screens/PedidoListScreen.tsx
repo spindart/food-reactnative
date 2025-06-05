@@ -27,7 +27,10 @@ const PedidoListScreen: React.FC = () => {
           return;
         }
         const response = await api.get(`/pedidos/cliente/${user.id}`);
-        setPedidos(response.data);
+        // Separa pedidos em atuais e históricos
+        const pedidosAtuais = response.data.filter((p: any) => p.status !== 'entregue' && p.status !== 'cancelado');
+        const pedidosHistorico = response.data.filter((p: any) => p.status === 'entregue' || p.status === 'cancelado');
+        setPedidos([...pedidosAtuais, ...pedidosHistorico]);
       } catch (err) {
         setError('Erro ao carregar os pedidos.');
       } finally {
@@ -51,6 +54,14 @@ const PedidoListScreen: React.FC = () => {
     }
   };
 
+  // Mapeamento de status para label e ícone
+  const statusMap: Record<string, { label: string; color: string; icon: string }> = {
+    pendente: { label: 'Pendente', color: '#e5293e', icon: '⏳' },
+    preparo: { label: 'Em preparo', color: '#f7b731', icon: '🍳' },
+    entregue: { label: 'Entregue', color: '#2ecc71', icon: '✅' },
+    cancelado: { label: 'Cancelado', color: '#e74c3c', icon: '❌' },
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -69,21 +80,27 @@ const PedidoListScreen: React.FC = () => {
 
   return (
     <FlatList
-      data={pedidos}
+      data={pedidos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <Text style={styles.id}>Pedido ID: {item.id}</Text>
-          <Text style={styles.status}>Status: {item.status}</Text>
-          <Text style={styles.date}>Data: {new Date(item.createdAt).toLocaleDateString()}</Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => handleUpdateStatus(item.id)}
-          >
-            <Text style={styles.buttonText}>Atualizar Status</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      renderItem={({ item }) => {
+        const statusInfo = statusMap[item.status] || { label: item.status, color: '#888', icon: '❔' };
+        return (
+          <View style={styles.card}>
+            <Text style={styles.id}>Pedido ID: {item.id}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 16, marginBottom: 2 }}>
+              <Text style={{ fontSize: 18, marginRight: 6 }}>{statusInfo.icon}</Text>
+              <Text style={[styles.status, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+            </View>
+            <Text style={styles.date}>Data: {new Date(item.createdAt).toLocaleString()}</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => handleUpdateStatus(item.id)}
+            >
+              <Text style={styles.buttonText}>Atualizar Status</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }}
       contentContainerStyle={styles.list}
     />
   );
@@ -104,40 +121,51 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: 18,
+    padding: 0,
+    marginBottom: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#f1f1f1',
   },
   id: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginTop: 14,
+    marginLeft: 16,
+    marginBottom: 2,
+    color: '#222',
   },
   status: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    fontSize: 15,
+    marginLeft: 16,
+    marginBottom: 2,
+    fontWeight: 'bold',
   },
   date: {
     fontSize: 14,
     color: '#888',
+    marginLeft: 16,
+    marginBottom: 14,
   },
   button: {
-    backgroundColor: '#007BFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 4,
-    marginTop: 8,
+    backgroundColor: '#e5293e',
+    paddingVertical: 12,
+    borderRadius: 0,
+    alignItems: 'center',
+    width: '100%',
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
-    textAlign: 'center',
+    letterSpacing: 0.5,
   },
 });
 

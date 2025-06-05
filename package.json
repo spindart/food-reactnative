@@ -15,8 +15,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@expo/vector-icons": "^14.1.0",
     "@prisma/client": "^6.8.2",
     "@react-native-async-storage/async-storage": "^2.1.2",
+    "@react-navigation/bottom-tabs": "^7.3.14",
     "@react-navigation/native-stack": "^7.3.14",
     "@react-navigation/stack": "^7.3.3",
     "@types/bcryptjs": "^2.4.6",
@@ -29,7 +31,10 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "jwt-decode": "^4.0.0",
+    "mercadopago": "^2.7.0",
     "react-native-paper": "^5.14.5",
+    "react-native-safe-area-context": "^5.4.1",
+    "react-native-screens": "^4.11.1",
     "ws": "^8.18.2",
     "zod": "^3.25.45"
   },

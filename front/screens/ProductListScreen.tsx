@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { View, FlatList, StyleSheet, Animated } from 'react-native';
 import { Snackbar, ActivityIndicator } from 'react-native-paper';
 import { getAllProdutos } from '../services/produtoService';
 import ProductCard from '../components/ProductCard';
+import BannerCarousel from '../components/BannerCarousel';
+import CategoryBar from '../components/CategoryBar';
 
 type Product = {
   id: string;
@@ -15,6 +17,8 @@ const ProductListScreen: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('lanches');
+  const [addAnim] = useState(new Animated.Value(1));
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -31,11 +35,24 @@ const ProductListScreen: React.FC = () => {
     fetchProducts();
   }, []);
 
+  const filteredProducts = products.filter((p) => {
+    if (selectedCategory === 'lanches') return true;
+    if (selectedCategory === 'bebidas') return p.nome.toLowerCase().includes('bebida');
+    if (selectedCategory === 'sobremesas') return p.nome.toLowerCase().includes('sobremesa');
+    if (selectedCategory === 'pizza') return p.nome.toLowerCase().includes('pizza');
+    if (selectedCategory === 'japonesa') return p.nome.toLowerCase().includes('sushi') || p.nome.toLowerCase().includes('japonesa');
+    if (selectedCategory === 'saudavel') return p.nome.toLowerCase().includes('salada') || p.nome.toLowerCase().includes('saudável');
+    return true;
+  });
+
   const handleAddToCart = (productId: string) => {
+    Animated.sequence([
+      Animated.timing(addAnim, { toValue: 1.15, duration: 120, useNativeDriver: true }),
+      Animated.timing(addAnim, { toValue: 1, duration: 120, useNativeDriver: true }),
+    ]).start();
     console.log(`Produto ${productId} adicionado ao carrinho.`);
   };
 
-  // Adicionar feedback visual para loading e erros
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -57,19 +74,22 @@ const ProductListScreen: React.FC = () => {
     );
   }
 
-  // Estilizar a lista de produtos com layout de grid usando numColumns
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
+      <BannerCarousel />
+      <CategoryBar selected={selectedCategory} onSelect={setSelectedCategory} />
       <FlatList
-        data={products}
+        data={filteredProducts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <ProductCard
-            nome={item.nome}
-            preco={item.preco}
-            imagem={item.imagem}
-            onAddToCart={() => handleAddToCart(item.id)}
-          />
+          <Animated.View style={{ transform: [{ scale: addAnim }] }}>
+            <ProductCard
+              nome={item.nome}
+              preco={item.preco}
+              imagem={item.imagem}
+              onAddToCart={() => handleAddToCart(item.id)}
+            />
+          </Animated.View>
         )}
         numColumns={2}
         contentContainerStyle={{ padding: 8, paddingBottom: 32 }}

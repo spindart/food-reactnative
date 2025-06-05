@@ -25,6 +25,7 @@ model Usuario {
   role  Role
   pedidos Pedido[] @relation("ClientePedidos")
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
+  avaliacoes  Avaliacao[]
 }
 
 enum Role {
@@ -42,6 +43,9 @@ model Estabelecimento {
   donoId      Int
   produtos    Produto[]
   pedidos     Pedido[]
+  avaliacao   Float     @default(0) // Média das avaliações
+  avaliacoesCount Int  @default(0) // Quantidade de avaliações
+  avaliacoes  Avaliacao[]
 }
 
 model Produto {
@@ -80,4 +84,15 @@ model ItemPedido {
   produtoId     Int
   quantidade    Int
   precoUnitario Float
+}
+
+model Avaliacao {
+  id                Int    @id @default(autoincrement())
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  estabelecimentoId Int
+  usuario           Usuario @relation(fields: [usuarioId], references: [id])
+  usuarioId         Int
+  nota              Int
+  comentario        String?
+  createdAt         DateTime @default(now())
 }
