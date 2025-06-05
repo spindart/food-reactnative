@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Estabelecimento" ADD COLUMN     "taxaEntrega" DOUBLE PRECISION NOT NULL DEFAULT 5.0,
+ADD COLUMN     "tempoEntregaMax" INTEGER NOT NULL DEFAULT 50,
+ADD COLUMN     "tempoEntregaMin" INTEGER NOT NULL DEFAULT 30;

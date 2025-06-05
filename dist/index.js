@@ -28,7 +28,13 @@ app.get('/', (req, res) => {
 app.use(error_middleware_1.errorHandler);
 const server = http_1.default.createServer(app);
 (0, notification_service_1.initNotificationWebSocket)(server);
-server.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
-    console.log(`WebSocket notifications available at ws://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+    server.listen(port, () => {
+        console.log(`Server is running at http://localhost:${port}`);
+        console.log(`WebSocket notifications available at ws://localhost:${port}`);
+    });
+}
+exports.default = app;
+if (process.env.NODE_ENV === 'test') {
+    module.exports = app;
+}

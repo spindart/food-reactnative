@@ -11,6 +11,9 @@ const EditarEstabelecimentoScreen: React.FC = () => {
   const [nome, setNome] = useState(estabelecimento.nome);
   const [descricao, setDescricao] = useState(estabelecimento.descricao);
   const [endereco, setEndereco] = useState(estabelecimento.endereco);
+  const [tempoEntregaMin, setTempoEntregaMin] = useState(estabelecimento.tempoEntregaMin?.toString() || '30');
+  const [tempoEntregaMax, setTempoEntregaMax] = useState(estabelecimento.tempoEntregaMax?.toString() || '50');
+  const [taxaEntrega, setTaxaEntrega] = useState(estabelecimento.taxaEntrega?.toString() || '5.00');
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +24,14 @@ const EditarEstabelecimentoScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      await updateEstabelecimento(estabelecimento.id, { nome, descricao, endereco });
+      await updateEstabelecimento(estabelecimento.id, {
+        nome,
+        descricao,
+        endereco,
+        tempoEntregaMin: Number(tempoEntregaMin),
+        tempoEntregaMax: Number(tempoEntregaMax),
+        taxaEntrega: Number(taxaEntrega),
+      });
       setSnackbar({ visible: true, message: 'Estabelecimento atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -55,6 +65,27 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         placeholder="Endereço"
         value={endereco}
         onChangeText={setEndereco}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Tempo de entrega mínimo (min)"
+        value={tempoEntregaMin}
+        onChangeText={setTempoEntregaMin}
+        keyboardType="numeric"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Tempo de entrega máximo (min)"
+        value={tempoEntregaMax}
+        onChangeText={setTempoEntregaMax}
+        keyboardType="numeric"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Taxa de entrega (R$)"
+        value={taxaEntrega}
+        onChangeText={setTaxaEntrega}
+        keyboardType="numeric"
       />
       <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Salvando...' : 'Salvar'}</Text>

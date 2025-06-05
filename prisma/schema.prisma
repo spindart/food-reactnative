@@ -36,6 +36,10 @@ model Estabelecimento {
   dono            Usuario     @relation("UsuarioEstabelecimentos", fields: [donoId], references: [id])
   pedidos         Pedido[]
   produtos        Produto[]
+  tempoEntregaMin   Int      @default(30)
+  tempoEntregaMax   Int      @default(50)
+  taxaEntrega       Float    @default(5.0)
+  categorias      Categoria[] @relation("EstabelecimentoCategorias")
 }
 
 model Produto {
@@ -46,6 +50,7 @@ model Produto {
   estabelecimentoId Int
   itensPedido       ItemPedido[]
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  categorias        Categoria[]     @relation("ProdutoCategorias")
 }
 
 model Pedido {
@@ -78,6 +83,13 @@ model Avaliacao {
   createdAt         DateTime        @default(now())
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
   usuario           Usuario         @relation(fields: [usuarioId], references: [id])
+}
+
+model Categoria {
+  id                Int             @id @default(autoincrement())
+  nome              String          @unique
+  estabelecimentos   Estabelecimento[] @relation("EstabelecimentoCategorias")
+  produtos          Produto[]       @relation("ProdutoCategorias")
 }
 
 enum Role {

@@ -29,7 +29,15 @@ app.use(errorHandler);
 const server = http.createServer(app);
 initNotificationWebSocket(server);
 
-server.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-  console.log(`WebSocket notifications available at ws://localhost:${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(port, () => {
+    console.log(`Server is running at http://localhost:${port}`);
+    console.log(`WebSocket notifications available at ws://localhost:${port}`);
+  });
+}
+
+export default app;
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports = app;
+}

@@ -6,7 +6,7 @@ const prisma = new client_1.PrismaClient();
 class EstabelecimentoController {
     static async create(req, res) {
         try {
-            const { nome, descricao, endereco } = req.body;
+            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega } = req.body;
             // Pega o id do usuário autenticado (dono)
             const user = req.user;
             if (!user || user.role !== 'dono') {
@@ -14,7 +14,15 @@ class EstabelecimentoController {
                 return;
             }
             const estabelecimento = await prisma.estabelecimento.create({
-                data: { nome, descricao, endereco, donoId: user.id },
+                data: {
+                    nome,
+                    descricao,
+                    endereco,
+                    donoId: user.id,
+                    tempoEntregaMin: tempoEntregaMin ?? 30,
+                    tempoEntregaMax: tempoEntregaMax ?? 50,
+                    taxaEntrega: taxaEntrega ?? 5.0,
+                },
             });
             res.status(201).json(estabelecimento);
             return;
@@ -56,10 +64,10 @@ class EstabelecimentoController {
     static async update(req, res) {
         try {
             const { id } = req.params;
-            const { nome, descricao, endereco } = req.body;
+            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega } = req.body;
             const estabelecimento = await prisma.estabelecimento.update({
                 where: { id: Number(id) },
-                data: { nome, descricao, endereco },
+                data: { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega },
             });
             res.json(estabelecimento);
             return;
@@ -103,31 +111,63 @@ class EstabelecimentoController {
     }
     static async avaliar(req, res) {
         try {
-            const { estabelecimentoId, usuarioId, nota, comentario } = req.body;
-            if (!estabelecimentoId || !usuarioId || !nota) {
-                res.status(400).json({ error: 'Campos obrigatórios: estabelecimentoId, usuarioId, nota' });
+            console.log('Middleware user:', req.user); // Log the user object from middleware
+            const { estabelecimentoId, nota, comentario } = req.body;
+            const usuarioId = req.user?.id; // Use authenticated user's ID
+            console.log('Received data:', { estabelecimentoId, nota, comentario, usuarioId });
+            if (!estabelecimentoId || nota === undefined || nota === null) {
+                res.status(400).json({ error: 'Campos obrigatórios: estabelecimentoId, nota' });
+                return;
+            }
+            if (nota < 0 || nota > 5) {
+                res.status(400).json({ error: 'A nota deve estar entre 0 e 5.' });
+                return;
+            }
+            // Ensure IDs are integers
+            const estabelecimentoIdInt = parseInt(estabelecimentoId, 10);
+            const usuarioIdInt = parseInt(usuarioId, 10);
+            console.log('Parsed IDs:', { estabelecimentoIdInt, usuarioIdInt });
+            if (isNaN(estabelecimentoIdInt) || isNaN(usuarioIdInt)) {
+                res.status(400).json({ error: 'IDs inválidos.' });
+                return;
+            }
+            // Validate existence of estabelecimentoId
+            const estabelecimento = await prisma.estabelecimento.findUnique({
+                where: { id: estabelecimentoIdInt },
+            });
+            if (!estabelecimento) {
+                res.status(404).json({ error: 'Estabelecimento não encontrado' });
+                return;
+            }
+            // Validate existence of usuarioId
+            const usuario = await prisma.usuario.findUnique({
+                where: { id: usuarioIdInt },
+            });
+            if (!usuario) {
+                res.status(404).json({ error: 'Usuário não encontrado' });
                 return;
             }
             // Cria avaliação
-            await prisma.avaliacao.create({
-                data: { estabelecimentoId, usuarioId, nota, comentario },
+            const avaliacao = await prisma.avaliacao.create({
+                data: { estabelecimentoId: estabelecimentoIdInt, usuarioId: usuarioIdInt, nota, comentario },
             });
             // Atualiza média e count
             const stats = await prisma.avaliacao.aggregate({
-                where: { estabelecimentoId },
+                where: { estabelecimentoId: estabelecimentoIdInt },
                 _avg: { nota: true },
                 _count: { id: true },
             });
             await prisma.estabelecimento.update({
-                where: { id: estabelecimentoId },
+                where: { id: estabelecimentoIdInt },
                 data: {
                     avaliacao: stats._avg.nota || 0,
                     avaliacoesCount: stats._count.id,
                 },
             });
-            res.status(201).json({ success: true });
+            res.status(201).json(avaliacao);
         }
         catch (error) {
+            console.error('Erro ao registrar avaliação:', error);
             res.status(500).json({ error: 'Erro ao registrar avaliação', details: error });
         }
     }

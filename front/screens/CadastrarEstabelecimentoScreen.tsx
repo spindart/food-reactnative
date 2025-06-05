@@ -9,6 +9,9 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [tempoEntregaMin, setTempoEntregaMin] = useState('30');
+  const [tempoEntregaMax, setTempoEntregaMax] = useState('50');
+  const [taxaEntrega, setTaxaEntrega] = useState('5.00');
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
 
@@ -19,7 +22,14 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      await createEstabelecimento({ nome, descricao, endereco });
+      await createEstabelecimento({
+        nome,
+        descricao,
+        endereco,
+        tempoEntregaMin: Number(tempoEntregaMin),
+        tempoEntregaMax: Number(tempoEntregaMax),
+        taxaEntrega: Number(taxaEntrega),
+      });
       setSnackbar({ visible: true, message: 'Estabelecimento cadastrado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -53,6 +63,27 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         placeholder="Endereço"
         value={endereco}
         onChangeText={setEndereco}
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Tempo de entrega mínimo (min)"
+        value={tempoEntregaMin}
+        onChangeText={setTempoEntregaMin}
+        keyboardType="numeric"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Tempo de entrega máximo (min)"
+        value={tempoEntregaMax}
+        onChangeText={setTempoEntregaMax}
+        keyboardType="numeric"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Taxa de entrega (R$)"
+        value={taxaEntrega}
+        onChangeText={setTaxaEntrega}
+        keyboardType="numeric"
       />
       <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Cadastrando...' : 'Cadastrar'}</Text>

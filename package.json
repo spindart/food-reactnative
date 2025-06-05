@@ -16,7 +16,7 @@
   "description": "",
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
-    "@prisma/client": "^6.8.2",
+    "@prisma/client": "^6.9.0",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/bottom-tabs": "^7.3.14",
     "@react-navigation/native-stack": "^7.3.14",
@@ -42,6 +42,7 @@
     "@types/express": "^5.0.2",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.15.29",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.33.0",
     "@typescript-eslint/parser": "^8.33.0",
     "eslint": "^9.28.0",
@@ -51,6 +52,7 @@
     "nodemon": "^3.1.10",
     "prettier": "^3.5.3",
     "prisma": "^6.8.2",
+    "supertest": "^7.1.1",
     "ts-jest": "^29.3.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"

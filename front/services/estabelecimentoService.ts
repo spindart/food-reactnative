@@ -3,7 +3,11 @@ import api from './api';
 type Estabelecimento = {
   id?: string;
   nome: string;
+  descricao: string;
   endereco: string;
+  tempoEntregaMin?: number;
+  tempoEntregaMax?: number;
+  taxaEntrega?: number;
 };
 
 export const getAllEstabelecimentos = async () => {
@@ -62,6 +66,29 @@ export const getMeusEstabelecimentos = async () => {
     return response.data;
   } catch (error) {
     console.error('Erro ao buscar estabelecimentos do dono:', error);
+    throw error;
+  }
+};
+
+export const getAvaliacoes = async (estabelecimentoId: string) => {
+  try {
+    const response = await api.get(`/estabelecimentos/${estabelecimentoId}/avaliacoes`);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar avaliações:', error);
+    throw error;
+  }
+};
+
+export const avaliarEstabelecimento = async (estabelecimentoId: string, avaliacao: { nota: number; comentario: string }) => {
+  try {
+    const response = await api.post(`/estabelecimentos/avaliar`, {
+      estabelecimentoId,
+      ...avaliacao,
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao enviar avaliação:', error);
     throw error;
   }
 };

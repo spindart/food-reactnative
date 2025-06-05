@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { View, FlatList, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Image, TextInput, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getAllEstabelecimentos } from '../services/estabelecimentoService';
+import { getAllEstabelecimentos, getAvaliacoes, avaliarEstabelecimento } from '../services/estabelecimentoService';
 import { RootStackParamList } from '../types';
+import EvaluationForm from '../components/EvaluationForm';
 
 const categorias = [
   { key: 'restaurante', label: 'Restaurantes' },
@@ -26,6 +27,9 @@ const EstabelecimentoListScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categoria, setCategoria] = useState('restaurante');
+  const [avaliacoes, setAvaliacoes] = useState<Record<string, any>>({});
+  const [nota, setNota] = useState<number>(0);
+  const [comentario, setComentario] = useState<string>('');
 
   useEffect(() => {
     const fetchEstabelecimentos = async () => {
@@ -40,6 +44,30 @@ const EstabelecimentoListScreen: React.FC = () => {
     };
     fetchEstabelecimentos();
   }, []);
+
+  const fetchAvaliacoes = async (estabelecimentoId: string) => {
+    try {
+      const data = await getAvaliacoes(estabelecimentoId);
+      setAvaliacoes((prev) => ({ ...prev, [estabelecimentoId]: data }));
+    } catch (err) {
+      console.error('Erro ao carregar avaliações:', err);
+    }
+  };
+
+  const handleAvaliar = async (estabelecimentoId: string, nota: number, comentario: string) => {
+    try {
+      await avaliarEstabelecimento(estabelecimentoId, { nota, comentario });
+      setNota(0);
+      setComentario('');
+      fetchAvaliacoes(estabelecimentoId);
+    } catch (err) {
+      console.error('Erro ao enviar avaliação:', err);
+    }
+  };
+
+  useEffect(() => {
+    estabelecimentos.forEach((e) => fetchAvaliacoes(e.id));
+  }, [estabelecimentos]);
 
   const handleViewProducts = (estabelecimento: any) => {
     navigation.navigate('ProdutosDoEstabelecimento', { estabelecimento });
@@ -115,9 +143,19 @@ const EstabelecimentoListScreen: React.FC = () => {
                 <Text style={styles.description}>{item.descricao}</Text>
                 <Text style={styles.address}>{item.endereco}</Text>
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoText}>⭐ 4.{index+1} </Text>
-                  <Text style={styles.infoText}>• 35-50 min </Text>
-                  <Text style={styles.infoText}>• R$ 5,99</Text>
+                  <Text style={styles.infoText}>⭐ {avaliacoes[item.id]?.media || 'N/A'} </Text>
+                  <Text style={styles.infoText}>• {avaliacoes[item.id]?.count || 0} avaliações</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoText}>
+                    🕒 {item.tempoEntregaMin} - {item.tempoEntregaMax} min
+                  </Text>
+                  <Text style={styles.infoText}>
+                    • Entrega: R$ {item.taxaEntrega?.toFixed(2)}
+                  </Text>
+                </View>
+                <View>
+                  <EvaluationForm onSubmit={(nota, comentario) => handleAvaliar(item.id, nota, comentario)} />
                 </View>
               </View>
             </View>
