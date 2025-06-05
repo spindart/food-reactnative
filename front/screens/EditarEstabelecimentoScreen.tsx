@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-nativ
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { updateEstabelecimento } from '../services/estabelecimentoService';
 import { Snackbar } from 'react-native-paper';
+import { getCategorias, Categoria } from '../services/categoriaService';
 
 const EditarEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -16,10 +17,28 @@ const EditarEstabelecimentoScreen: React.FC = () => {
   const [taxaEntrega, setTaxaEntrega] = useState(estabelecimento.taxaEntrega?.toString() || '5.00');
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>(estabelecimento.categorias ? estabelecimento.categorias.map((c: Categoria) => c.id) : []);
+
+  React.useEffect(() => {
+    getCategorias().then(setCategorias);
+  }, []);
+
+  const handleToggleCategoria = (id: string) => {
+    setCategoriasSelecionadas((prev) => {
+      if (prev.includes(id)) return prev.filter((c) => c !== id);
+      if (prev.length < 3) return [...prev, id];
+      return prev;
+    });
+  };
 
   const handleSubmit = async () => {
     if (!nome || !descricao || !endereco) {
       setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
+      return;
+    }
+    if (categoriasSelecionadas.length === 0) {
+      setSnackbar({ visible: true, message: 'Selecione pelo menos uma categoria.', type: 'error' });
       return;
     }
     setLoading(true);
@@ -31,6 +50,7 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         tempoEntregaMin: Number(tempoEntregaMin),
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
+        categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)),
       });
       setSnackbar({ visible: true, message: 'Estabelecimento atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
@@ -87,6 +107,29 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         onChangeText={setTaxaEntrega}
         keyboardType="numeric"
       />
+      {/* Seleção de categorias dinâmicas */}
+      <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Categorias (até 3):</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>
+        {categorias.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={{
+              backgroundColor: categoriasSelecionadas.includes(cat.id) ? '#e5293e' : '#f6f6f6',
+              borderRadius: 18,
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              marginRight: 8,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: categoriasSelecionadas.includes(cat.id) ? '#e5293e' : '#eee',
+            }}
+            onPress={() => handleToggleCategoria(cat.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: categoriasSelecionadas.includes(cat.id) ? '#fff' : '#222', fontWeight: 'bold' }}>{cat.nome}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
       <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Salvando...' : 'Salvar'}</Text>
       </TouchableOpacity>

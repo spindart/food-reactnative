@@ -3,16 +3,9 @@ import { View, FlatList, Text, TouchableOpacity, StyleSheet, ActivityIndicator, 
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getAllEstabelecimentos, getAvaliacoes, avaliarEstabelecimento } from '../services/estabelecimentoService';
+import { getCategorias, Categoria } from '../services/categoriaService';
 import { RootStackParamList } from '../types';
 import EvaluationForm from '../components/EvaluationForm';
-
-const categorias = [
-  { key: 'restaurante', label: 'Restaurantes' },
-  { key: 'mercado', label: 'Mercados' },
-  { key: 'bebidas', label: 'Bebidas' },
-  { key: 'farmacia', label: 'Farmácias' },
-  { key: 'pet', label: 'Pet' },
-];
 
 const fakeImages = [
   require('../assets/icon.png'),
@@ -26,7 +19,8 @@ const EstabelecimentoListScreen: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [categoria, setCategoria] = useState('restaurante');
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoria, setCategoria] = useState<string>('');
   const [avaliacoes, setAvaliacoes] = useState<Record<string, any>>({});
   const [nota, setNota] = useState<number>(0);
   const [comentario, setComentario] = useState<string>('');
@@ -73,10 +67,23 @@ const EstabelecimentoListScreen: React.FC = () => {
     navigation.navigate('ProdutosDoEstabelecimento', { estabelecimento });
   };
 
-  // Filtro por busca e categoria (fake: todos são restaurante)
+  useEffect(() => {
+    const fetchCategorias = async () => {
+      try {
+        const data = await getCategorias();
+        setCategorias(data);
+        if (data.length > 0) setCategoria(data[0].nome);
+      } catch (err) {
+        // fallback: não faz nada
+      }
+    };
+    fetchCategorias();
+  }, []);
+
+  // Filtro por busca e categoria
   const filtered = estabelecimentos.filter(e =>
     (e.nome.toLowerCase().includes(search.toLowerCase()) || e.descricao.toLowerCase().includes(search.toLowerCase())) &&
-    (categoria === 'restaurante' || e.tipo === categoria)
+    (categoria === '' || (e.categorias && e.categorias.some((cat: Categoria) => cat.nome === categoria)))
   );
 
   if (loading) {
@@ -121,12 +128,12 @@ const EstabelecimentoListScreen: React.FC = () => {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, paddingLeft: 8 }}>
         {categorias.map(cat => (
           <TouchableOpacity
-            key={cat.key}
-            style={[styles.category, categoria === cat.key && styles.selectedCategory]}
-            onPress={() => setCategoria(cat.key)}
+            key={cat.id}
+            style={[styles.category, categoria === cat.nome && styles.selectedCategory]}
+            onPress={() => setCategoria(cat.nome)}
             activeOpacity={0.7}
           >
-            <Text style={[styles.categoryLabel, categoria === cat.key && styles.selectedCategoryLabel]}>{cat.label}</Text>
+            <Text style={[styles.categoryLabel, categoria === cat.nome && styles.selectedCategoryLabel]}>{cat.nome}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -153,6 +160,12 @@ const EstabelecimentoListScreen: React.FC = () => {
                   <Text style={styles.infoText}>
                     • Entrega: R$ {item.taxaEntrega?.toFixed(2)}
                   </Text>
+                </View>
+                {/* Exibir categorias do estabelecimento na listagem */}
+                <View style={styles.infoRow}>
+                  {item.categorias && item.categorias.map((cat: Categoria) => (
+                    <Text key={cat.id} style={{ color: '#007BFF', fontWeight: 'bold', marginRight: 8 }}>{cat.nome}</Text>
+                  ))}
                 </View>
                 <View>
                   <EvaluationForm onSubmit={(nota, comentario) => handleAvaliar(item.id, nota, comentario)} />

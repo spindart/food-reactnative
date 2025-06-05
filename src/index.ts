@@ -6,6 +6,7 @@ import produtoRoutes from './routes/produto.routes';
 import pedidoRoutes from './routes/pedido.routes';
 import usuarioRoutes from './routes/usuario.routes';
 import pagamentoRoutes from './routes/pagamento.routes';
+import categoriaRoutes from './routes/categoria.routes';
 import { initNotificationWebSocket } from './services/notification.service';
 import { errorHandler } from './services/error.middleware';
 
@@ -19,6 +20,7 @@ app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/pagamento', pagamentoRoutes);
+app.use('/api/categorias', categoriaRoutes);
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');

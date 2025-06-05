@@ -6,12 +6,25 @@ const prisma = new client_1.PrismaClient();
 class EstabelecimentoController {
     static async create(req, res) {
         try {
-            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega } = req.body;
+            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
             // Pega o id do usuário autenticado (dono)
             const user = req.user;
             if (!user || user.role !== 'dono') {
                 res.status(403).json({ error: 'Apenas usuários com perfil de dono podem criar estabelecimentos.' });
                 return;
+            }
+            if (categorias && categorias.length > 3) {
+                res.status(400).json({ error: 'Selecione no máximo 3 categorias.' });
+                return;
+            }
+            let categoriaConnect = [];
+            if (categorias && categorias.length > 0) {
+                categoriaConnect = await Promise.all(categorias.map(async (nome) => {
+                    let cat = await prisma.categoria.findUnique({ where: { nome } });
+                    if (!cat)
+                        cat = await prisma.categoria.create({ data: { nome } });
+                    return { id: cat.id };
+                }));
             }
             const estabelecimento = await prisma.estabelecimento.create({
                 data: {
@@ -22,7 +35,9 @@ class EstabelecimentoController {
                     tempoEntregaMin: tempoEntregaMin ?? 30,
                     tempoEntregaMax: tempoEntregaMax ?? 50,
                     taxaEntrega: taxaEntrega ?? 5.0,
+                    categorias: { connect: categoriaConnect },
                 },
+                include: { categorias: true },
             });
             res.status(201).json(estabelecimento);
             return;
@@ -32,9 +47,47 @@ class EstabelecimentoController {
             return;
         }
     }
+    static async update(req, res) {
+        try {
+            const { id } = req.params;
+            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
+            if (categorias && categorias.length > 3) {
+                res.status(400).json({ error: 'Selecione no máximo 3 categorias.' });
+                return;
+            }
+            let categoriaConnect = [];
+            if (categorias && categorias.length > 0) {
+                categoriaConnect = await Promise.all(categorias.map(async (nome) => {
+                    let cat = await prisma.categoria.findUnique({ where: { nome } });
+                    if (!cat)
+                        cat = await prisma.categoria.create({ data: { nome } });
+                    return { id: cat.id };
+                }));
+            }
+            const estabelecimento = await prisma.estabelecimento.update({
+                where: { id: Number(id) },
+                data: {
+                    nome,
+                    descricao,
+                    endereco,
+                    tempoEntregaMin,
+                    tempoEntregaMax,
+                    taxaEntrega,
+                    categorias: categorias ? { set: categoriaConnect } : undefined,
+                },
+                include: { categorias: true },
+            });
+            res.json(estabelecimento);
+            return;
+        }
+        catch (error) {
+            res.status(400).json({ error: 'Erro ao atualizar estabelecimento', details: error });
+            return;
+        }
+    }
     static async getAll(req, res) {
         try {
-            const estabelecimentos = await prisma.estabelecimento.findMany();
+            const estabelecimentos = await prisma.estabelecimento.findMany({ include: { categorias: true } });
             res.json(estabelecimentos);
             return;
         }
@@ -48,6 +101,7 @@ class EstabelecimentoController {
             const { id } = req.params;
             const estabelecimento = await prisma.estabelecimento.findUnique({
                 where: { id: Number(id) },
+                include: { categorias: true },
             });
             if (!estabelecimento) {
                 res.status(404).json({ error: 'Estabelecimento não encontrado' });
@@ -58,22 +112,6 @@ class EstabelecimentoController {
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao buscar estabelecimento', details: error });
-            return;
-        }
-    }
-    static async update(req, res) {
-        try {
-            const { id } = req.params;
-            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega } = req.body;
-            const estabelecimento = await prisma.estabelecimento.update({
-                where: { id: Number(id) },
-                data: { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega },
-            });
-            res.json(estabelecimento);
-            return;
-        }
-        catch (error) {
-            res.status(400).json({ error: 'Erro ao atualizar estabelecimento', details: error });
             return;
         }
     }

@@ -1,4 +1,5 @@
 import api from './api';
+import type { Categoria } from './categoriaService';
 
 type Estabelecimento = {
   id?: string;
@@ -8,6 +9,7 @@ type Estabelecimento = {
   tempoEntregaMin?: number;
   tempoEntregaMax?: number;
   taxaEntrega?: number;
+  categorias?: Categoria[];
 };
 
 export const getAllEstabelecimentos = async () => {
