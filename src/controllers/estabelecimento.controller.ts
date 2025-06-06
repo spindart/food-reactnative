@@ -142,7 +142,7 @@ export class EstabelecimentoController {
       }
       const estabelecimentos = await prisma.estabelecimento.findMany({
         where: { donoId: user.id },
-        include: { categorias: true, imagem: true }, // Garante que imagem seja incluída
+        include: { categorias: true }, // Garante que imagem seja incluída
       });
       // Prisma já retorna o campo imagem se ele existir no schema e no banco
       res.json(estabelecimentos);
