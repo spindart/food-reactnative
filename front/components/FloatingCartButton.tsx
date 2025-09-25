@@ -12,7 +12,7 @@ const FloatingCartButton: React.FC = () => {
   return (
     <TouchableOpacity
       style={styles.fab}
-      onPress={() => navigation.navigate('Carrinho' as never)}
+      onPress={() => navigation.navigate('HomeTabs', { screen: 'Carrinho' })}
       activeOpacity={0.85}
     >
       <Text style={styles.fabText}>{qtd} item{qtd > 1 ? 's' : ''} | R$ {total.toFixed(2)}</Text>

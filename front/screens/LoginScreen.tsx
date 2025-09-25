@@ -42,7 +42,7 @@ const LoginScreen: React.FC = () => {
         if (user?.role === 'dono') {
           navigation.navigate('DonoDashboard');
         } else {
-          navigation.navigate('Home');
+          navigation.navigate('HomeTabs');
         }
       }, 1500);
     } catch (error) {

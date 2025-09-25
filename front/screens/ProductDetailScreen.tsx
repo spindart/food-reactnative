@@ -1,4 +1,5 @@
 import React from 'react';
+import { useCart } from '../context/CartContext';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { RouteProp, useRoute } from '@react-navigation/native';
 
@@ -17,8 +18,17 @@ const ProductDetailScreen: React.FC = () => {
   const route = useRoute<ProductDetailRouteProp>();
   const { nome, descricao, preco, imagem } = route.params;
 
+  const { dispatch } = useCart();
   const handleAddToCart = () => {
-    console.log(`${nome} adicionado ao carrinho.`);
+    dispatch({
+      type: 'ADD_ITEM',
+      payload: {
+        id: nome,
+        nome,
+        preco,
+        quantidade: 1,
+      },
+    });
   };
 
   return (

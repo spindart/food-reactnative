@@ -64,8 +64,19 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
     setModalProduto(null);
   };
 
+  const { dispatch } = useCart();
   const handleAddToCart = () => {
-    // Adicione ao carrinho real aqui
+    if (!modalProduto) return;
+    dispatch({
+      type: 'ADD_ITEM',
+      payload: {
+        id: modalProduto.id,
+        nome: modalProduto.nome,
+        preco: modalProduto.preco,
+        quantidade,
+        observacao,
+      },
+    });
     closeModal();
   };
 

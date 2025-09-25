@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export class EstabelecimentoController {
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
+  const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem } = req.body;
       // Pega o id do usuário autenticado (dono)
       const user = (req as any).user;
       if (!user || user.role !== 'dono') {
@@ -37,6 +37,7 @@ export class EstabelecimentoController {
           tempoEntregaMax: tempoEntregaMax ?? 50,
           taxaEntrega: taxaEntrega ?? 5.0,
           categorias: { connect: categoriaConnect },
+          imagem: imagem ?? undefined,
         },
         include: { categorias: true },
       });

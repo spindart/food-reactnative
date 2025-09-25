@@ -16,7 +16,7 @@ import ProdutosDoEstabelecimentoScreen from './screens/ProdutosDoEstabelecimento
 import EditarProdutoScreen from './screens/EditarProdutoScreen';
 import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoScreen';
 import * as Notifications from 'expo-notifications';
-import { CartProvider } from './context/CartContext';
+import { CartProvider, useCart } from './context/CartContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -33,6 +33,7 @@ const registerForPushNotifications = async () => {
 };
 
 function MainTabs() {
+  const { state } = useCart();
   return (
     <Tab.Navigator
       screenOptions={({ route }: any) => ({
@@ -44,7 +45,28 @@ function MainTabs() {
           if (route.name === 'Home') return <Ionicons name="fast-food" size={size} color={color} />;
           if (route.name === 'Estabelecimentos') return <Ionicons name="storefront" size={size} color={color} />;
           if (route.name === 'Pedidos') return <Ionicons name="receipt" size={size} color={color} />;
-          if (route.name === 'Carrinho') return <Ionicons name="cart" size={size} color={color} />;
+          if (route.name === 'Carrinho') {
+            return (
+              <View>
+                <Ionicons name="cart" size={size} color={color} />
+                {state.items.length > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    right: -8,
+                    top: -4,
+                    backgroundColor: '#e5293e',
+                    borderRadius: 10,
+                    width: 20,
+                    height: 20,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>{state.items.length}</Text>
+                  </View>
+                )}
+              </View>
+            );
+          }
           return null;
         },
       })}

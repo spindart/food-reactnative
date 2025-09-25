@@ -217,8 +217,19 @@ const CheckoutScreen: React.FC = () => {
         renderItem={({ item }) => (
           <View style={styles.item}>
             <Text style={styles.name}>{item.nome}</Text>
-            <Text style={styles.details}>Qtd: {item.quantidade}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: -1 } })} style={{ marginHorizontal: 4 }}>
+                <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>-</Text>
+              </TouchableOpacity>
+              <Text style={styles.details}>Qtd: {item.quantidade}</Text>
+              <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: 1 } })} style={{ marginHorizontal: 4 }}>
+                <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>+</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.details}>R$ {(item.preco * item.quantidade).toFixed(2)}</Text>
+            <TouchableOpacity onPress={() => dispatch({ type: 'REMOVE_ITEM', payload: item.id })} style={{ marginLeft: 12 }}>
+              <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Remover</Text>
+            </TouchableOpacity>
           </View>
         )}
         contentContainerStyle={styles.list}
@@ -237,9 +248,23 @@ const CheckoutScreen: React.FC = () => {
       </View>
       {error && <Text style={{ color: 'red', textAlign: 'center' }}>{error}</Text>}
       {success && <Text style={{ color: 'green', textAlign: 'center' }}>{success}</Text>}
-      <TouchableOpacity style={styles.button} onPress={handleConfirmOrder} disabled={loading}>
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: cartItems.length === 0 ? '#ccc' : '#e5293e' }]}
+        onPress={handleConfirmOrder}
+        disabled={loading || cartItems.length === 0}
+      >
         <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'Confirmar Pedido'}</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#888', marginTop: 8 }]}
+        onPress={() => dispatch({ type: 'CLEAR_CART' })}
+        disabled={cartItems.length === 0}
+      >
+        <Text style={styles.buttonText}>Limpar Carrinho</Text>
+      </TouchableOpacity>
+      {cartItems.length === 0 && (
+        <Text style={{ color: '#e5293e', textAlign: 'center', marginTop: 12, fontWeight: 'bold' }}>Seu carrinho está vazio.</Text>
+      )}
       {paymentResponse && paymentResponse.point_of_interaction && paymentResponse.point_of_interaction.transaction_data && paymentResponse.point_of_interaction.transaction_data.qr_code_base64 && (
         <View style={{ alignItems: 'center', marginVertical: 16, backgroundColor: '#fff', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
           <Text style={{ fontWeight: 'bold', color: '#e5293e', marginBottom: 8, fontSize: 16 }}>Escaneie o QR Code PIX para pagar</Text>

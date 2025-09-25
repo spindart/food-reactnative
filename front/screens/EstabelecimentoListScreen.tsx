@@ -75,10 +75,15 @@ const EstabelecimentoListScreen: React.FC = () => {
   }, []);
 
   // Filtro por busca e categoria
-  const filtered = estabelecimentos.filter(e =>
-    (e.nome.toLowerCase().includes(search.toLowerCase()) || e.descricao.toLowerCase().includes(search.toLowerCase())) &&
-    (categoria === '' || (e.categorias && e.categorias.some((cat: Categoria) => cat.nome === categoria)))
-  );
+  const filtered = estabelecimentos.filter(e => {
+    const nomeMatch = e.nome.toLowerCase().includes(search.toLowerCase()) || e.descricao.toLowerCase().includes(search.toLowerCase());
+    // Se não houver categoria selecionada, mostra todos
+    if (!categoria || categoria === '') return nomeMatch;
+    // Se o estabelecimento não tiver categorias, mostra também
+    if (!e.categorias || e.categorias.length === 0) return nomeMatch;
+    // Se houver categoria, filtra normalmente
+    return nomeMatch && e.categorias.some((cat: Categoria) => cat.nome === categoria);
+  });
 
   if (loading) {
     return (

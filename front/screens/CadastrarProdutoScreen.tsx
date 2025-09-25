@@ -30,8 +30,8 @@ const CadastrarProdutoScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!nome || !descricao || !preco || !imagem) {
-      setSnackbar({ visible: true, message: 'Preencha todos os campos e selecione uma imagem.', type: 'error' });
+    if (!nome || !descricao || !preco) {
+      setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
       return;
     }
     setLoading(true);

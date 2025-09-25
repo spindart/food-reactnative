@@ -54,10 +54,10 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
       setSnackbar({ visible: true, message: 'Selecione pelo menos uma categoria.', type: 'error' });
       return;
     }
-    if (!imagem) {
-      setSnackbar({ visible: true, message: 'Selecione uma imagem.', type: 'error' });
-      return;
-    }
+    // if (!imagem) {
+    //   setSnackbar({ visible: true, message: 'Selecione uma imagem.', type: 'error' });
+    //   return;
+    // }
     setLoading(true);
     try {
       await createEstabelecimento({
