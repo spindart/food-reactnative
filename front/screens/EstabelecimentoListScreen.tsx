@@ -152,10 +152,10 @@ const EstabelecimentoListScreen: React.FC = () => {
                 <Text style={styles.name}>{item.nome}</Text>
                 <Text style={styles.description}>{item.descricao}</Text>
                 <Text style={styles.address}>{item.endereco}</Text>
-                <View style={styles.infoRow}>
+                {/* <View style={styles.infoRow}>
                   <Text style={styles.infoText}>⭐ {avaliacoes[item.id]?.media || 'N/A'} </Text>
                   <Text style={styles.infoText}>• {avaliacoes[item.id]?.count || 0} avaliações</Text>
-                </View>
+                </View> */}
                 <View style={styles.infoRow}>
                   <Text style={styles.infoText}>
                     🕒 {item.tempoEntregaMin} - {item.tempoEntregaMax} min
@@ -170,9 +170,9 @@ const EstabelecimentoListScreen: React.FC = () => {
                     <Text key={cat.id} style={{ color: '#007BFF', fontWeight: 'bold', marginRight: 8 }}>{cat.nome}</Text>
                   ))}
                 </View>
-                <View>
+                {/* <View>
                   <EvaluationForm onSubmit={(nota, comentario) => handleAvaliar(item.id, nota, comentario)} />
-                </View>
+                </View> */}
               </View>
             </View>
           </TouchableOpacity>

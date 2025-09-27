@@ -6,6 +6,7 @@ type CartItem = {
   preco: number;
   quantidade: number;
   observacao?: string;
+  estabelecimentoId: string;
 };
 
 type CartState = {

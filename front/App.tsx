@@ -43,7 +43,6 @@ function MainTabs() {
         tabBarStyle: { backgroundColor: '#fff', borderTopLeftRadius: 18, borderTopRightRadius: 18, height: 60 },
         tabBarIcon: ({ color, size }: any) => {
           if (route.name === 'Home') return <Ionicons name="fast-food" size={size} color={color} />;
-          if (route.name === 'Estabelecimentos') return <Ionicons name="storefront" size={size} color={color} />;
           if (route.name === 'Pedidos') return <Ionicons name="receipt" size={size} color={color} />;
           if (route.name === 'Carrinho') {
             return (
@@ -67,6 +66,7 @@ function MainTabs() {
               </View>
             );
           }
+          if (route.name === 'Endereços') return <Ionicons name="location" size={size} color={color} />;
           return null;
         },
       })}
@@ -74,6 +74,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={require('./screens/EstabelecimentoListScreen').default} options={{ title: 'Início' }} />
       <Tab.Screen name="Pedidos" component={require('./screens/PedidoListScreen').default} />
       <Tab.Screen name="Carrinho" component={require('./screens/CheckoutScreen').default} />
+      <Tab.Screen name="Endereços" component={require('./screens/EnderecoScreen').default} options={{ title: 'Meus Endereços' }} />
     </Tab.Navigator>
   );
 }

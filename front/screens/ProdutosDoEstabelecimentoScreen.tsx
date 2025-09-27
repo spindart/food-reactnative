@@ -4,6 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { getProdutoByEstabelecimento } from '../services/produtoService';
 import FloatingCartButton from '../components/FloatingCartButton';
 import { useCart } from '../context/CartContext';
+import { Alert } from 'react-native';
 
 const categorias = [
   { key: 'lanches', label: 'Lanches' },
@@ -67,6 +68,42 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const { dispatch } = useCart();
   const handleAddToCart = () => {
     if (!modalProduto) return;
+    // Verifica se já existe item no carrinho de outro estabelecimento
+    const cartItems = cartState.items;
+    if (cartItems.length > 0) {
+      const currentEstId = cartItems[0].estabelecimentoId;
+      if (currentEstId && currentEstId !== estabelecimento.id) {
+        Alert.alert(
+          'Novo pedido',
+          'Você só pode adicionar produtos de um estabelecimento por vez. O carrinho será limpo para iniciar um novo pedido.',
+          [
+            {
+              text: 'Cancelar',
+              style: 'cancel',
+            },
+            {
+              text: 'OK',
+              onPress: () => {
+                dispatch({ type: 'CLEAR_CART' });
+                dispatch({
+                  type: 'ADD_ITEM',
+                  payload: {
+                    id: modalProduto.id,
+                    nome: modalProduto.nome,
+                    preco: modalProduto.preco,
+                    quantidade,
+                    observacao,
+                    estabelecimentoId: estabelecimento.id,
+                  },
+                });
+                closeModal();
+              },
+            },
+          ]
+        );
+        return;
+      }
+    }
     dispatch({
       type: 'ADD_ITEM',
       payload: {
@@ -75,6 +112,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
         preco: modalProduto.preco,
         quantidade,
         observacao,
+        estabelecimentoId: estabelecimento.id,
       },
     });
     closeModal();

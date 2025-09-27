@@ -1,3 +1,14 @@
+model Address {
+  id         Int      @id @default(autoincrement())
+  usuarioId  Int
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id])
+  label      String   // Nome do endereço (ex: Casa, Trabalho)
+  address    String   // Endereço completo
+  latitude   Float?
+  longitude  Float?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
 generator client {
   provider = "prisma-client-js"
 }
@@ -22,6 +33,7 @@ model Usuario {
   avaliacoes       Avaliacao[]
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
   pedidos          Pedido[]          @relation("ClientePedidos")
+  addresses        Address[]
 }
 
 model Estabelecimento {

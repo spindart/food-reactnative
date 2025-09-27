@@ -8,6 +8,7 @@ import usuarioRoutes from './routes/usuario.routes';
 import pagamentoRoutes from './routes/pagamento.routes';
 import categoriaRoutes from './routes/categoria.routes';
 import { initNotificationWebSocket } from './services/notification.service';
+import addressRoutes from './routes/address.routes';
 import { errorHandler } from './services/error.middleware';
 
 const app = express();
@@ -20,6 +21,7 @@ app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/pagamento', pagamentoRoutes);
+app.use('/api/enderecos', addressRoutes);
 app.use('/api/categorias', categoriaRoutes);
 
 app.get('/', (req, res) => {

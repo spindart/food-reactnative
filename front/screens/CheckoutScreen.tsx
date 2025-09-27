@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Pressable, Image, ActivityIndicator } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { createOrder } from '../services/orderService';
+import { getEstabelecimentoById } from '../services/estabelecimentoService';
 import { useCart } from '../context/CartContext';
 import { getCurrentUser } from '../services/currentUserService';
 import { useRoute } from '@react-navigation/native';
@@ -16,7 +18,27 @@ const CheckoutScreen: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [estabelecimentoId, setEstabelecimentoId] = useState<string | null>(null);
-  const [endereco, setEndereco] = useState('Rua Exemplo, 123');
+  const [enderecos, setEnderecos] = useState<any[]>([]);
+  const [enderecoId, setEnderecoId] = useState<number | null>(null);
+  const [endereco, setEndereco] = useState('');
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await import('../services/enderecoService');
+        const lista = await res.getEnderecos();
+        setEnderecos(lista);
+        // Seleciona endereço padrão se houver
+        const padrao = lista.find((e: any) => e.isDefault);
+        if (padrao) {
+          setEnderecoId(padrao.id);
+          setEndereco(padrao.address);
+        } else if (lista.length > 0) {
+          setEnderecoId(lista[0].id);
+          setEndereco(lista[0].address);
+        }
+      } catch (e) {}
+    })();
+  }, []);
   const [pagamento, setPagamento] = useState<'dinheiro' | 'cartao' | 'pix'>('dinheiro');
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
@@ -30,16 +52,26 @@ const CheckoutScreen: React.FC = () => {
   const [pixTimer, setPixTimer] = useState(300); // 5 minutos
   const [copied, setCopied] = useState(false);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const taxaEntrega = 5.99;
+  const [taxaEntrega, setTaxaEntrega] = useState(5.99);
 
   React.useEffect(() => {
     getCurrentUser().then((user) => {
       setUserId(user?.id ? String(user.id) : null);
     });
-    if (route.params?.estabelecimentoId) {
-      setEstabelecimentoId(String(route.params.estabelecimentoId));
+    // Descobrir o estabelecimento do primeiro item do carrinho
+    let estId = route.params?.estabelecimentoId;
+    if (!estId && cartState.items.length > 0) {
+      estId = cartState.items[0].estabelecimentoId || cartState.items[0].estabelecimento_id;
     }
-  }, [route.params]);
+    if (estId) {
+      setEstabelecimentoId(String(estId));
+      getEstabelecimentoById(String(estId)).then((est) => {
+        if (est && est.taxaEntrega !== undefined && est.taxaEntrega !== null) {
+          setTaxaEntrega(Number(est.taxaEntrega));
+        }
+      });
+    }
+  }, [route.params, cartState.items]);
 
   const cartItems = cartState.items;
 
@@ -192,12 +224,33 @@ const CheckoutScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Endereço de entrega</Text>
-      <TextInput
-        style={styles.input}
-        value={endereco}
-        onChangeText={setEndereco}
-        placeholder="Digite o endereço"
-      />
+      {enderecos.length > 0 ? (
+        <View>
+          <Text style={{ marginBottom: 6 }}>Selecione um endereço salvo:</Text>
+          <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, marginBottom: 12, backgroundColor: '#fff' }}>
+            <Picker
+              selectedValue={enderecoId}
+              onValueChange={(itemValue, itemIndex) => {
+                setEnderecoId(itemValue);
+                const e = enderecos.find((x) => x.id === itemValue);
+                setEndereco(e ? e.address : '');
+              }}
+              style={{ height: 48 }}
+            >
+              {enderecos.map((e: any) => (
+                <Picker.Item key={e.id} label={`${e.label}${e.isDefault ? ' (Padrão)' : ''} - ${e.address}`} value={e.id} />
+              ))}
+            </Picker>
+          </View>
+        </View>
+      ) : (
+        <TextInput
+          style={styles.input}
+          value={endereco}
+          onChangeText={setEndereco}
+          placeholder="Digite o endereço"
+        />
+      )}
       <Text style={styles.sectionTitle}>Forma de pagamento</Text>
       <View style={{ flexDirection: 'row', marginBottom: 16 }}>
         <TouchableOpacity style={[styles.payButton, pagamento === 'dinheiro' && styles.payButtonSelected]} onPress={() => setPagamento('dinheiro')}>
