@@ -52,7 +52,7 @@ const CheckoutScreen: React.FC = () => {
   const [pixTimer, setPixTimer] = useState(300); // 5 minutos
   const [copied, setCopied] = useState(false);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const [taxaEntrega, setTaxaEntrega] = useState(5.99);
+  const [taxaEntrega, setTaxaEntrega] = useState(0);
 
   React.useEffect(() => {
     getCurrentUser().then((user) => {

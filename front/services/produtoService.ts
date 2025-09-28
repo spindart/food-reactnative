@@ -8,6 +8,7 @@ export type Produto = {
   descricao: string;
   imagem: string;
   estabelecimentoId?: string | number;
+  categoriaId?: string;
 };
 
 export const getAllProdutos = async () => {

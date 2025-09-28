@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { createProduto } from '../services/produtoService';
 import { Snackbar } from 'react-native-paper';
@@ -13,6 +14,9 @@ const CadastrarProdutoScreen: React.FC = () => {
   const [descricao, setDescricao] = useState('');
   const [preco, setPreco] = useState('');
   const [imagem, setImagem] = useState<string>('');
+  const [categoriaId, setCategoriaId] = useState(
+    estabelecimento.categorias && estabelecimento.categorias.length > 0 ? estabelecimento.categorias[0].id : ''
+  );
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
 
@@ -30,13 +34,13 @@ const CadastrarProdutoScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!nome || !descricao || !preco) {
+    if (!nome || !descricao || !preco || !categoriaId) {
       setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
       return;
     }
     setLoading(true);
     try {
-      await createProduto({ nome, descricao, preco: parseFloat(preco), estabelecimentoId: estabelecimento.id, imagem });
+      await createProduto({ nome, descricao, preco: parseFloat(preco), estabelecimentoId: estabelecimento.id, imagem, categoriaId });
       setSnackbar({ visible: true, message: 'Produto cadastrado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -73,6 +77,23 @@ const CadastrarProdutoScreen: React.FC = () => {
         onChangeText={setPreco}
         keyboardType="decimal-pad"
       />
+      <Text style={styles.label}>Categoria</Text>
+      <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
+        {estabelecimento.categorias && estabelecimento.categorias.length > 0 ? (
+          <Picker
+            selectedValue={categoriaId}
+            onValueChange={(itemValue) => setCategoriaId(itemValue)}
+            style={{ backgroundColor: '#fff' }}
+            itemStyle={{ fontWeight: 'bold' }}
+          >
+            {estabelecimento.categorias.map((cat: any) => (
+              <Picker.Item key={cat.id} label={cat.nome} value={cat.id} />
+            ))}
+          </Picker>
+        ) : (
+          <Text style={{ color: '#888', padding: 10 }}>Nenhuma categoria disponível</Text>
+        )}
+      </View>
       <View style={{ alignItems: 'center', marginBottom: 12 }}>
         {imagem ? (
           <Image source={{ uri: imagem }} style={{ width: 120, height: 120, borderRadius: 12, marginBottom: 8 }} />

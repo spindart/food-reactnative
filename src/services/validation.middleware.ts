@@ -5,6 +5,11 @@ export const estabelecimentoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
   descricao: z.string().min(1, 'Descrição é obrigatória'),
   endereco: z.string().min(1, 'Endereço é obrigatório'),
+  taxaEntrega: z.number().positive('Taxa de entrega deve ser positiva'),
+  tempoEntregaMin: z.number().int().positive('Tempo mínimo deve ser positivo'),
+  tempoEntregaMax: z.number().int().positive('Tempo máximo deve ser positivo'),
+  categorias: z.array(z.any()).optional(),
+  imagem: z.string().optional(),
 });
 
 // Esquema para Produto

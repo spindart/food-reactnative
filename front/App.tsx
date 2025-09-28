@@ -66,7 +66,7 @@ function MainTabs() {
               </View>
             );
           }
-          if (route.name === 'Endereços') return <Ionicons name="location" size={size} color={color} />;
+          if (route.name === 'Perfil') return <Ionicons name="person-circle" size={size} color={color} />;
           return null;
         },
       })}
@@ -74,7 +74,7 @@ function MainTabs() {
       <Tab.Screen name="Home" component={require('./screens/EstabelecimentoListScreen').default} options={{ title: 'Início' }} />
       <Tab.Screen name="Pedidos" component={require('./screens/PedidoListScreen').default} />
       <Tab.Screen name="Carrinho" component={require('./screens/CheckoutScreen').default} />
-      <Tab.Screen name="Endereços" component={require('./screens/EnderecoScreen').default} options={{ title: 'Meus Endereços' }} />
+  <Tab.Screen name="Perfil" component={require('./screens/PerfilScreen').default} options={{ title: 'Perfil' }} />
     </Tab.Navigator>
   );
 }
@@ -92,6 +92,7 @@ export default function App() {
           <Stack.Screen name="Register" component={RegisterScreen} />
           <Stack.Screen name="HomeTabs" component={MainTabs} options={{ headerShown: false }} />
           <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Detalhes do Produto' }} />
+          <Stack.Screen name="Enderecos" component={require('./screens/EnderecoScreen').default} options={{ title: 'Meus Endereços' }} />
           <Stack.Screen name="DonoDashboard" component={DonoDashboardScreen} options={{ title: 'Painel do Dono' }} />
           <Stack.Screen name="CadastrarEstabelecimento" component={CadastrarEstabelecimentoScreen} options={{ title: 'Cadastrar Estabelecimento' }} />
           <Stack.Screen name="EditarEstabelecimento" component={EditarEstabelecimentoScreen} options={{ title: 'Editar Estabelecimento' }} />

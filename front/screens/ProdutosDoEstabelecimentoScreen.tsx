@@ -2,27 +2,22 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Modal, Pressable, ScrollView, TextInput } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getProdutoByEstabelecimento } from '../services/produtoService';
+import { getCurrentUser } from '../services/currentUserService';
 import FloatingCartButton from '../components/FloatingCartButton';
 import { useCart } from '../context/CartContext';
 import { Alert } from 'react-native';
 
-const categorias = [
-  { key: 'lanches', label: 'Lanches' },
-  { key: 'bebidas', label: 'Bebidas' },
-  { key: 'sobremesas', label: 'Sobremesas' },
-  { key: 'pizza', label: 'Pizza' },
-  { key: 'japonesa', label: 'Japonesa' },
-  { key: 'saudavel', label: 'Saudável' },
-];
+
 
 const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
   const route = useRoute<any>();
   const { estabelecimento } = route.params;
+  const [isDono, setIsDono] = useState(false);
   const [produtos, setProdutos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCategoria, setSelectedCategoria] = useState('lanches');
+  const [selectedCategoria, setSelectedCategoria] = useState<string | null>(null); // null = mostrar todos
   const [modalVisible, setModalVisible] = useState(false);
   const [modalProduto, setModalProduto] = useState<any | null>(null);
   const [quantidade, setQuantidade] = useState(1);
@@ -32,6 +27,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   useEffect(() => {
     const fetchProdutos = async () => {
       try {
+        setLoading(true);
         const data = await getProdutoByEstabelecimento(estabelecimento.id);
         setProdutos(data);
       } catch (err) {
@@ -41,16 +37,29 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
       }
     };
     fetchProdutos();
-  }, [estabelecimento.id]);
+    // Verifica se usuário é dono
+    const checkDono = async () => {
+      const user = await getCurrentUser();
+      if (user && (user.id === estabelecimento.donoId || user.role === 'DONO')) {
+        setIsDono(true);
+      } else {
+        setIsDono(false);
+      }
+    };
+    checkDono();
+
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchProdutos();
+    });
+    return unsubscribe;
+  }, [estabelecimento.id, navigation]);
 
   const filtered = produtos.filter((p) => {
-    if (selectedCategoria === 'lanches') return true;
-    if (selectedCategoria === 'bebidas') return p.nome.toLowerCase().includes('bebida');
-    if (selectedCategoria === 'sobremesas') return p.nome.toLowerCase().includes('sobremesa');
-    if (selectedCategoria === 'pizza') return p.nome.toLowerCase().includes('pizza');
-    if (selectedCategoria === 'japonesa') return p.nome.toLowerCase().includes('sushi') || p.nome.toLowerCase().includes('japonesa');
-    if (selectedCategoria === 'saudavel') return p.nome.toLowerCase().includes('salada') || p.nome.toLowerCase().includes('saudável');
-    return true;
+    if (!selectedCategoria) return true;
+    if (Array.isArray(p.categorias)) {
+      return p.categorias.some((cat: any) => cat.id === selectedCategoria);
+    }
+    return false;
   });
 
   const openModal = (produto: any) => {
@@ -133,14 +142,22 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
       <Text style={styles.title}>{estabelecimento.nome}</Text>
       {/* Categorias internas */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriaBar}>
-        {categorias.map(cat => (
+        <TouchableOpacity
+          key="all"
+          style={[styles.categoriaChip, selectedCategoria === null && styles.selectedCategoriaChip]}
+          onPress={() => setSelectedCategoria(null)}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.categoriaChipLabel, selectedCategoria === null && styles.selectedCategoriaChipLabel]}>Todos</Text>
+        </TouchableOpacity>
+        {estabelecimento.categorias && estabelecimento.categorias.map((cat: any) => (
           <TouchableOpacity
-            key={cat.key}
-            style={[styles.categoria, selectedCategoria === cat.key && styles.selectedCategoria]}
-            onPress={() => setSelectedCategoria(cat.key)}
-            activeOpacity={0.7}
+            key={cat.id}
+            style={[styles.categoriaChip, selectedCategoria === cat.id && styles.selectedCategoriaChip]}
+            onPress={() => setSelectedCategoria(cat.id)}
+            activeOpacity={0.8}
           >
-            <Text style={[styles.categoriaLabel, selectedCategoria === cat.key && styles.selectedCategoriaLabel]}>{cat.label}</Text>
+            <Text style={[styles.categoriaChipLabel, selectedCategoria === cat.id && styles.selectedCategoriaChipLabel]}>{cat.nome}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -149,24 +166,30 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
         <Text>Carregando...</Text>
       ) : error ? (
         <Text style={styles.errorText}>{error}</Text>
+      ) : filtered.length === 0 ? (
+        <Text style={{ color: '#888', textAlign: 'center', marginTop: 32, fontSize: 16 }}>Nenhum produto nesta categoria.</Text>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <TouchableOpacity activeOpacity={0.85} onPress={() => openModal(item)}>
-              <View style={styles.card}>
-                <Image source={{ uri: item.imagem }} style={styles.prodImage} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.nome}</Text>
-                  <Text style={styles.desc}>{item.descricao}</Text>
-                  <Text style={styles.price}>R$ {item.preco.toFixed(2)}</Text>
+            <View style={styles.card}>
+              <Image source={{ uri: item.imagem }} style={styles.prodImage} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{item.nome}</Text>
+                <Text style={styles.desc}>{item.descricao}</Text>
+                <Text style={styles.price}>R$ {item.preco.toFixed(2)}</Text>
+                {isDono ? (
+                  <TouchableOpacity style={[styles.addButton, { backgroundColor: '#007BFF' }]} onPress={() => navigation.navigate('EditarProduto', { produto: item })}>
+                    <Text style={styles.addButtonText}>Editar</Text>
+                  </TouchableOpacity>
+                ) : (
                   <TouchableOpacity style={styles.addButton} onPress={() => openModal(item)}>
                     <Text style={styles.addButtonText}>Adicionar</Text>
                   </TouchableOpacity>
-                </View>
+                )}
               </View>
-            </TouchableOpacity>
+            </View>
           )}
         />
       )}
@@ -214,10 +237,38 @@ const styles = StyleSheet.create({
   backButtonText: { color: '#e5293e', fontWeight: 'bold', fontSize: 15 },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, marginLeft: 16, marginTop: 8 },
   categoriaBar: { marginBottom: 8, paddingLeft: 8 },
-  categoria: { backgroundColor: '#f6f6f6', borderRadius: 18, paddingVertical: 10, paddingHorizontal: 20, marginRight: 10, borderWidth: 1, borderColor: '#eee' },
-  selectedCategoria: { backgroundColor: '#e5293e', borderColor: '#e5293e' },
-  categoriaLabel: { color: '#222', fontWeight: 'bold', fontSize: 15 },
-  selectedCategoriaLabel: { color: '#fff' },
+  categoriaChip: {
+    backgroundColor: '#f6f6f6',
+    borderRadius: 18,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginRight: 10,
+    borderWidth: 0,
+    minHeight: 32,
+    minWidth: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  selectedCategoriaChip: {
+    backgroundColor: '#e5293e',
+    borderColor: '#e5293e',
+    shadowColor: '#e5293e',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  categoriaChipLabel: {
+    color: '#e5293e',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  selectedCategoriaChipLabel: {
+    color: '#fff',
+  },
   card: { backgroundColor: '#fff', borderRadius: 18, flexDirection: 'row', alignItems: 'center', padding: 0, marginBottom: 18, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f1f1' },
   prodImage: { width: 90, height: 90, borderRadius: 18, margin: 12, backgroundColor: '#f6f6f6' },
   name: { fontSize: 19, fontWeight: 'bold', marginTop: 8, marginLeft: 0, marginBottom: 2, color: '#222' },

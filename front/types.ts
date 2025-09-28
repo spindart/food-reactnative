@@ -8,4 +8,6 @@ export type RootStackParamList = {
     imagem: string;
   };
   ProdutosDoEstabelecimento: { estabelecimento: { id: string; nome: string; descricao: string; endereco: string } };
+  Enderecos: undefined;
+  Perfil: undefined;
 };

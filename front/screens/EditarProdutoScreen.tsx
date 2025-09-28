@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { updateProduto, deleteProduto } from '../services/produtoService';
+import { getCategorias, Categoria } from '../services/categoriaService';
 import { Snackbar } from 'react-native-paper';
 
 const EditarProdutoScreen: React.FC = () => {
@@ -11,17 +13,34 @@ const EditarProdutoScreen: React.FC = () => {
   const [nome, setNome] = useState(produto.nome);
   const [descricao, setDescricao] = useState(produto.descricao);
   const [preco, setPreco] = useState(produto.preco.toString());
+  const [categoriaId, setCategoriaId] = useState('');
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    getCategorias().then((cats) => {
+      setCategorias(cats);
+      // Seleciona a categoria correta do produto
+      if (produto.categoriaId) {
+        setCategoriaId(produto.categoriaId);
+      } else if (produto.categorias && produto.categorias.length > 0) {
+        setCategoriaId(produto.categorias[0].id);
+      } else if (cats.length > 0) {
+        setCategoriaId(cats[0].id);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async () => {
-    if (!nome || !descricao || !preco) {
+    if (!nome || !descricao || !preco || !categoriaId) {
       setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
       return;
     }
     setLoading(true);
     try {
-      await updateProduto(produto.id, { nome, descricao, preco: parseFloat(preco), estabelecimentoId: produto.estabelecimentoId });
+  await updateProduto(produto.id, { nome, descricao, preco: parseFloat(preco), estabelecimentoId: produto.estabelecimentoId, categoriaId, imagem: produto.imagem });
       setSnackbar({ visible: true, message: 'Produto atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -74,6 +93,23 @@ const EditarProdutoScreen: React.FC = () => {
         onChangeText={setPreco}
         keyboardType="decimal-pad"
       />
+      <Text style={styles.label}>Categoria</Text>
+      <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
+        {categorias.length > 0 ? (
+          <Picker
+            selectedValue={categoriaId}
+            onValueChange={(itemValue) => setCategoriaId(itemValue)}
+            style={{ backgroundColor: '#fff' }}
+            itemStyle={{ fontWeight: 'bold' }}
+          >
+            {categorias.map((cat) => (
+              <Picker.Item key={cat.id} label={cat.nome} value={cat.id} />
+            ))}
+          </Picker>
+        ) : (
+          <Text style={{ color: '#888', padding: 10 }}>Nenhuma categoria disponível</Text>
+        )}
+      </View>
       <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? 'Salvando...' : 'Salvar'}</Text>
       </TouchableOpacity>
@@ -95,6 +131,7 @@ const EditarProdutoScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 24 },
+  label: { fontSize: 16, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 12, marginBottom: 8 },
   button: { backgroundColor: '#007BFF', padding: 12, borderRadius: 4, alignItems: 'center', marginBottom: 16 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
