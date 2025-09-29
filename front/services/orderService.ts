@@ -1,20 +1,21 @@
 import api from './api';
 
-type OrderItem = {
-  produtoId: string;
+// Novo payload para o endpoint /orders/confirm
+type ProdutoPayload = {
+  produtoId: number;
   quantidade: number;
-  precoUnitario: number;
 };
-
 type CreateOrderPayload = {
-  clienteId: string;
-  estabelecimentoId: string;
-  itens: OrderItem[];
+  clienteId: number;
+  estabelecimentoId: number;
+  produtos: ProdutoPayload[];
+  formaPagamento: string;
+  valorTotal: number;
 };
 
 export const createOrder = async (payload: CreateOrderPayload) => {
   try {
-    const response = await api.post('/pedidos', payload);
+    const response = await api.post('/pedidos/confirm', payload);
     return response.data;
   } catch (error) {
     console.error('Erro ao criar pedido:', error);

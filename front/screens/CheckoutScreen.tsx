@@ -200,16 +200,14 @@ const CheckoutScreen: React.FC = () => {
         return;
       }
       const payload = {
-        clienteId: userId,
-        estabelecimentoId,
-        itens: cartItems.map((item) => ({
-          produtoId: item.id,
-          quantidade: item.quantidade,
-          precoUnitario: item.preco,
+        clienteId: Number(userId),
+        estabelecimentoId: Number(estabelecimentoId),
+        produtos: cartItems.map((item) => ({
+          produtoId: Number(item.id),
+          quantidade: item.quantidade
         })),
-        endereco,
-        pagamento,
-        dadosCartao: pagamento === 'cartao' ? { cardNumber, cardName, cardExp, cardCvv } : undefined,
+        formaPagamento: pagamento,
+        total: Number(calculateTotal())
       };
       const response = await createOrder(payload);
       setSuccess('Pedido confirmado!');

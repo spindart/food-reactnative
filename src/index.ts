@@ -10,12 +10,14 @@ import categoriaRoutes from './routes/categoria.routes';
 import { initNotificationWebSocket } from './services/notification.service';
 import addressRoutes from './routes/address.routes';
 import { errorHandler } from './services/error.middleware';
+import avaliacaoRoutes from './routes/avaliacao.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use('/api/estabelecimentos', estabelecimentoRoutes);
+app.use('/api/avaliacoes', avaliacaoRoutes);
 app.use('/api/produtos', produtoRoutes);
 app.use('/api/pedidos', pedidoRoutes);
 app.use('/api/auth', authRoutes);
