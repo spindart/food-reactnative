@@ -6,7 +6,30 @@ import { getEstabelecimentoById } from '../services/estabelecimentoService';
 import { useCart } from '../context/CartContext';
 import { getCurrentUser } from '../services/currentUserService';
 import { useRoute } from '@react-navigation/native';
-import { pagarComMercadoPago, consultarStatusPagamento } from '../services/mercadopagoService';
+import { iniciarPagamentoPix, consultarStatusPagamento } from '../services/pixService';
+import { createCardPayment, getCardPaymentStatus, CardPaymentResponse } from '../services/cardPaymentService';
+
+// Função para gerar token de cartão de teste Mercado Pago
+async function gerarTokenCartao({ cardNumber, cardExp, cardCvv, cardName }: { cardNumber: string; cardExp: string; cardCvv: string; cardName: string }) {
+  const [expMonth, expYear] = cardExp.split('/');
+  const body = {
+    card_number: cardNumber.replace(/\s/g, ''),
+    expiration_month: Number(expMonth),
+    expiration_year: Number('20' + expYear),
+    security_code: cardCvv,
+    cardholder: {
+      name: cardName,
+    },
+  };
+  const res = await fetch('https://api.mercadopago.com/v1/card_tokens?public_key=TEST-9fdac427-5ed4-4ab2-96a2-83f6240a4138', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error('Erro ao gerar token do cartão');
+  const data = await res.json();
+  return data.id;
+}
 import * as Clipboard from 'expo-clipboard';
 import { Animated } from 'react-native';
 
@@ -47,10 +70,11 @@ const CheckoutScreen: React.FC = () => {
   const [cardCvv, setCardCvv] = useState('');
   const [cardError, setCardError] = useState('');
   const [paymentResponse, setPaymentResponse] = useState<any>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
   const [pixTimer, setPixTimer] = useState(300); // 5 minutos
   const [copied, setCopied] = useState(false);
+  const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const [taxaEntrega, setTaxaEntrega] = useState(0);
 
@@ -61,7 +85,7 @@ const CheckoutScreen: React.FC = () => {
     // Descobrir o estabelecimento do primeiro item do carrinho
     let estId = route.params?.estabelecimentoId;
     if (!estId && cartState.items.length > 0) {
-      estId = cartState.items[0].estabelecimentoId || cartState.items[0].estabelecimento_id;
+      estId = cartState.items[0].estabelecimentoId;
     }
     if (estId) {
       setEstabelecimentoId(String(estId));
@@ -88,6 +112,10 @@ const CheckoutScreen: React.FC = () => {
     try {
       const resp = await consultarStatusPagamento(paymentId);
       setPaymentStatus(resp.status);
+      if (resp.status === 'approved') {
+        // Cria o pedido só após pagamento aprovado
+        await criarPedidoAposPagamento();
+      }
     } catch (e) {
       setPaymentStatus('rejected');
     } finally {
@@ -97,17 +125,13 @@ const CheckoutScreen: React.FC = () => {
 
   // Efeito para polling do status do pagamento PIX
   React.useEffect(() => {
-    if (paymentResponse && paymentResponse.id && paymentResponse.status === 'pending') {
-      setPaymentStatus('pending');
+    if (pixPaymentId && paymentStatus === 'pending') {
       const interval = setInterval(() => {
-        checkPaymentStatus(paymentResponse.id);
+        checkPaymentStatus(pixPaymentId);
       }, 4000);
       return () => clearInterval(interval);
     }
-    if (paymentResponse && paymentResponse.status) {
-      setPaymentStatus(paymentResponse.status);
-    }
-  }, [paymentResponse]);
+  }, [pixPaymentId, paymentStatus]);
 
   // Efeito para countdown do timer
   React.useEffect(() => {
@@ -144,13 +168,14 @@ const CheckoutScreen: React.FC = () => {
 
   // Função para copiar código PIX
   const handleCopyPixCode = () => {
-    if (paymentResponse?.point_of_interaction?.transaction_data?.qr_code) {
-      Clipboard.setStringAsync(paymentResponse.point_of_interaction.transaction_data.qr_code);
+    if (paymentResponse?.qr_code) {
+      Clipboard.setStringAsync(paymentResponse.qr_code);
       setCopied(true);
     }
   };
 
   const handleConfirmOrder = async () => {
+  console.log('handleConfirmOrder chamado', { pagamento, cardNumber, cardName, cardExp, cardCvv });
     if (pagamento === 'pix') {
       setLoading(true);
       setError(null);
@@ -161,13 +186,15 @@ const CheckoutScreen: React.FC = () => {
           setLoading(false);
           return;
         }
-        // Integração Mercado Pago PIX
-        const mpResp = await pagarComMercadoPago({
+        // Inicia pagamento PIX
+        const pixResp = await iniciarPagamentoPix({
           amount: Number(calculateTotal()),
           description: `Pedido em ${estabelecimentoId}`,
-          payerEmail: 'cliente@ifood.com', // Trocar pelo e-mail real do usuário
+          payerEmail: 'test_user_882153306740827176@testuser.com', // Trocar pelo e-mail real do usuário
         });
-        setPaymentResponse(mpResp);
+        setPaymentResponse(pixResp);
+        setPixPaymentId(pixResp.paymentId);
+        setPaymentStatus('pending');
         setSuccess('Pagamento PIX iniciado! Veja o QR Code abaixo.');
       } catch (error) {
         setError('Erro ao iniciar pagamento PIX.');
@@ -183,40 +210,96 @@ const CheckoutScreen: React.FC = () => {
         setShowCardModal(true);
         return;
       }
-      // Aqui você faria a chamada real ao gateway de pagamento
-      // Exemplo: await processarPagamentoCartao({ cardNumber, cardName, cardExp, cardCvv, valor: calculateTotal() })
-      // Simulação:
-      await new Promise((res) => setTimeout(res, 1200));
-      setCardError('');
-      setShowCardModal(false);
-    }
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      if (!userId || !estabelecimentoId) {
-        setError('Usuário ou estabelecimento não encontrado.');
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      try {
+        if (!userId || !estabelecimentoId) {
+          setError('Usuário ou estabelecimento não encontrado.');
+          setLoading(false);
+          return;
+        }
+        // Gerar token real do cartão de teste
+        const token = await gerarTokenCartao({ cardNumber, cardExp, cardCvv, cardName });
+        // Detectar bandeira (visa/master/etc) pelo número
+        let paymentMethodId = 'visa';
+        if (/^5[1-5]/.test(cardNumber.replace(/\s/g, ''))) paymentMethodId = 'master';
+        // Chamar backend para criar pagamento
+        const payload = {
+          amount: Number(calculateTotal()),
+          description: `Pedido em ${estabelecimentoId}`,
+          payerEmail: 'test_user_9116110696713408733@testuser.com', // e-mail do comprador de teste
+          token,
+          installments: 1, // ou permitir escolha
+          paymentMethodId,
+          issuerId: undefined, // ou detectar
+        };
+        console.log('Chamando createCardPayment', payload);
+        let cardResp;
+        try {
+          cardResp = await createCardPayment(payload);
+        } catch (err) {
+          console.log('Erro na chamada createCardPayment:', err);
+          setError('Erro ao chamar backend: ' + (err?.message || err));
+          setLoading(false);
+          return;
+        }
+        console.log('Resposta do backend (cartao):', cardResp);
+        setPaymentResponse(cardResp);
+        setPaymentStatus(cardResp.status);
+        let cardPaymentId = cardResp.paymentId;
+        setShowCardModal(false);
+        if (cardResp.status === 'pending') {
+          // Polling até aprovação
+          let statusResp: CardPaymentResponse | { status: string; status_detail: string; paymentId?: string } = cardResp;
+          let tentativas = 0;
+          while (statusResp.status === 'pending' && tentativas < 20) {
+            await new Promise((res) => setTimeout(res, 4000));
+            const statusData = await getCardPaymentStatus(cardPaymentId);
+            statusResp = { ...statusData, paymentId: cardPaymentId };
+            console.log('Polling status pagamento:', statusResp);
+            setPaymentStatus(statusResp.status);
+            if (statusResp.status === 'approved') {
+              await criarPedidoAposPagamento();
+              setSuccess('Pagamento aprovado! Pedido confirmado.');
+              break;
+            }
+            tentativas++;
+          }
+          if (statusResp.status !== 'approved') {
+            setError('Pagamento não aprovado. Tente novamente.');
+          }
+        } else if (cardResp.status === 'approved') {
+          await criarPedidoAposPagamento();
+          setSuccess('Pagamento aprovado! Pedido confirmado.');
+        } else {
+          setError('Pagamento não aprovado.');
+        }
+      } catch (error) {
+        setError('Erro ao processar pagamento com cartão.');
+      } finally {
         setLoading(false);
-        return;
       }
-      const payload = {
-        clienteId: Number(userId),
-        estabelecimentoId: Number(estabelecimentoId),
-        produtos: cartItems.map((item) => ({
-          produtoId: Number(item.id),
-          quantidade: item.quantidade
-        })),
-        formaPagamento: pagamento,
-        total: Number(calculateTotal())
-      };
-      const response = await createOrder(payload);
-      setSuccess('Pedido confirmado!');
-      dispatch({ type: 'CLEAR_CART' });
-    } catch (error) {
-      setError('Erro ao confirmar pedido.');
-    } finally {
-      setLoading(false);
+      return;
     }
+  };
+
+  // Cria o pedido após pagamento aprovado
+  const criarPedidoAposPagamento = async () => {
+    if (!userId || !estabelecimentoId) return;
+    const payload = {
+      clienteId: Number(userId),
+      estabelecimentoId: Number(estabelecimentoId),
+      produtos: cartItems.map((item) => ({
+        produtoId: Number(item.id),
+        quantidade: item.quantidade
+      })),
+      formaPagamento: pagamento,
+      valorTotal: Number(calculateTotal()), // ou 'total', conforme backend
+    };
+    const response = await createOrder(payload);
+    setSuccess('Pedido confirmado!');
+    dispatch({ type: 'CLEAR_CART' });
   };
 
   return (
@@ -316,11 +399,11 @@ const CheckoutScreen: React.FC = () => {
       {cartItems.length === 0 && (
         <Text style={{ color: '#e5293e', textAlign: 'center', marginTop: 12, fontWeight: 'bold' }}>Seu carrinho está vazio.</Text>
       )}
-      {paymentResponse && paymentResponse.point_of_interaction && paymentResponse.point_of_interaction.transaction_data && paymentResponse.point_of_interaction.transaction_data.qr_code_base64 && (
+      {paymentResponse && paymentResponse.qr_code_base64 && (
         <View style={{ alignItems: 'center', marginVertical: 16, backgroundColor: '#fff', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
           <Text style={{ fontWeight: 'bold', color: '#e5293e', marginBottom: 8, fontSize: 16 }}>Escaneie o QR Code PIX para pagar</Text>
           <Image
-            source={{ uri: `data:image/png;base64,${paymentResponse.point_of_interaction.transaction_data.qr_code_base64}` }}
+            source={{ uri: `data:image/png;base64,${paymentResponse.qr_code_base64}` }}
             style={{ width: 200, height: 200, borderRadius: 12, borderWidth: 2, borderColor: '#e5293e', marginBottom: 12 }}
             resizeMode="contain"
           />

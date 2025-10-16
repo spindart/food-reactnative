@@ -1,3 +1,4 @@
+// Removido método duplicado fora da classe
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 
 const client = new MercadoPagoConfig({
@@ -5,23 +6,61 @@ const client = new MercadoPagoConfig({
 });
 
 export class MercadoPagoService {
-  static async createPayment({ amount, description, payerEmail }: { amount: number; description: string; payerEmail: string }) {
+  static async createCardPayment({ amount, description, payerEmail, token, installments, paymentMethodId, issuerId }: {
+    amount: number;
+    description: string;
+    payerEmail: string;
+    token: string;
+    installments: number;
+    paymentMethodId: string;
+    issuerId?: number;
+  }) {
     try {
       const payment = new Payment(client);
       const result = await payment.create({
         body: {
           transaction_amount: amount,
           description,
-          payment_method_id: 'pix', // ou 'credit_card', adaptar conforme frontend
+          payment_method_id: paymentMethodId,
+          payer: {
+            email: payerEmail,
+          },
+          token,
+          installments,
+          issuer_id: issuerId,
+        },
+      });
+      return {
+        paymentId: result.id,
+        status: result.status,
+        status_detail: result.status_detail,
+      };
+    } catch (error: any) {
+      throw new Error(error.message || 'Erro ao criar pagamento com cartão Mercado Pago');
+    }
+  }
+  static async createPixPayment({ amount, description, payerEmail }: { amount: number; description: string; payerEmail: string }) {
+    try {
+      const payment = new Payment(client);
+      const result = await payment.create({
+        body: {
+          transaction_amount: amount,
+          description,
+          payment_method_id: 'pix',
           payer: {
             email: payerEmail,
           },
         },
       });
-      // O SDK Mercado Pago v2 retorna o pagamento diretamente no result
-      return result;
+      // Retorna info PIX: qr_code, qr_code_base64, paymentId
+      return {
+        paymentId: result.id,
+        status: result.status,
+        qr_code: result.point_of_interaction?.transaction_data?.qr_code,
+        qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
+      };
     } catch (error: any) {
-      throw new Error(error.message || 'Erro ao criar pagamento Mercado Pago');
+      throw new Error(error.message || 'Erro ao criar pagamento PIX Mercado Pago');
     }
   }
 

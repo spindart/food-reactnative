@@ -13,7 +13,7 @@ class MercadoPagoService {
                 body: {
                     transaction_amount: amount,
                     description,
-                    payment_method_id: 'pix', // ou 'credit_card', adaptar conforme frontend
+                    payment_method_id: 'pix',
                     payer: {
                         email: payerEmail,
                     },
