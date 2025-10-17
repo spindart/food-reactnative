@@ -6,7 +6,7 @@ const prisma = new client_1.PrismaClient();
 class EstabelecimentoController {
     static async create(req, res) {
         try {
-            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
+            const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem } = req.body;
             // Pega o id do usuário autenticado (dono)
             const user = req.user;
             if (!user || user.role !== 'dono') {
@@ -36,6 +36,7 @@ class EstabelecimentoController {
                     tempoEntregaMax: tempoEntregaMax ?? 50,
                     taxaEntrega: taxaEntrega ?? 5.0,
                     categorias: { connect: categoriaConnect },
+                    imagem: imagem ?? undefined,
                 },
                 include: { categorias: true },
             });
@@ -140,7 +141,7 @@ class EstabelecimentoController {
             }
             const estabelecimentos = await prisma.estabelecimento.findMany({
                 where: { donoId: user.id },
-                include: { categorias: true },
+                include: { categorias: true }, // Garante que imagem seja incluída
             });
             // Prisma já retorna o campo imagem se ele existir no schema e no banco
             res.json(estabelecimentos);

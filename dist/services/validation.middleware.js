@@ -8,6 +8,11 @@ exports.estabelecimentoSchema = zod_1.z.object({
     nome: zod_1.z.string().min(1, 'Nome é obrigatório'),
     descricao: zod_1.z.string().min(1, 'Descrição é obrigatória'),
     endereco: zod_1.z.string().min(1, 'Endereço é obrigatório'),
+    taxaEntrega: zod_1.z.number().positive('Taxa de entrega deve ser positiva'),
+    tempoEntregaMin: zod_1.z.number().int().positive('Tempo mínimo deve ser positivo'),
+    tempoEntregaMax: zod_1.z.number().int().positive('Tempo máximo deve ser positivo'),
+    categorias: zod_1.z.array(zod_1.z.any()).optional(),
+    imagem: zod_1.z.string().optional(),
 });
 // Esquema para Produto
 exports.produtoSchema = zod_1.z.object({

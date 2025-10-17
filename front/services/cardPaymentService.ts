@@ -8,12 +8,26 @@ export interface CardPaymentPayload {
   installments: number;
   paymentMethodId: string;
   issuerId?: number;
+  cardNumber?: string; // Adicionado para detecção de bandeira
 }
 
 export interface CardPaymentResponse {
   paymentId: string;
   status: string;
   status_detail: string;
+}
+
+export interface CardTokenPayload {
+  cardNumber: string;
+  cardExp: string;
+  cardCvv: string;
+  cardName: string;
+}
+
+export async function generateCardToken(payload: CardTokenPayload) {
+  console.log('Chamando generateCardToken', { ...payload, cardNumber: payload.cardNumber.substring(0, 4) + '****' });
+  const { data } = await api.post<{ token: string }>('/pagamento/gerar-token-cartao', payload);
+  return data.token;
 }
 
 export async function createCardPayment(payload: CardPaymentPayload) {

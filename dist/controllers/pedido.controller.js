@@ -14,26 +14,81 @@ const pedidoSchema = zod_1.z.object({
     })).min(1, 'A lista de produtos não pode ser vazia'),
 });
 class PedidoController {
-    static async create(req, res) {
-        const parse = pedidoSchema.safeParse(req.body);
-        if (!parse.success) {
-            res.status(400).json({ error: 'Dados inválidos', details: parse.error.errors });
+    // Confirmação de pedido: POST /orders/confirm
+    static async confirmOrder(req, res) {
+        // Espera JSON:
+        // {
+        //   clienteId: number,
+        //   estabelecimentoId: number,
+        //   produtos: [{ produtoId: number, quantidade: number }],
+        //   formaPagamento: string,
+        //   total: number
+        // }
+        const { clienteId, estabelecimentoId, produtos, formaPagamento, total: totalCliente } = req.body;
+        if (!clienteId || !estabelecimentoId || !produtos || !Array.isArray(produtos) || produtos.length === 0 || !formaPagamento || typeof totalCliente !== 'number') {
+            res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
             return;
         }
-        const { clienteId, estabelecimentoId, produtos } = parse.data;
         try {
-            const produtosDb = await prisma.produto.findMany({
-                where: { id: { in: produtos.map(p => p.produtoId) }, estabelecimentoId },
-            });
-            if (produtosDb.length !== produtos.length) {
-                res.status(400).json({ error: 'Um ou mais produtos não encontrados para este estabelecimento' });
+            // Busca produtos e taxa de entrega
+            const [produtosDb, estabelecimento] = await Promise.all([
+                prisma.produto.findMany({ where: { id: { in: produtos.map(p => p.produtoId) }, estabelecimentoId } }),
+                prisma.estabelecimento.findUnique({ where: { id: estabelecimentoId } })
+            ]);
+            if (!estabelecimento) {
+                res.status(400).json({ error: 'Estabelecimento não encontrado.' });
                 return;
             }
-            let valorTotal = 0;
+            if (produtosDb.length !== produtos.length) {
+                res.status(400).json({ error: 'Um ou mais produtos não encontrados para este estabelecimento.' });
+                return;
+            }
+            let subtotal = 0;
             const itensPedido = produtos.map((p) => {
                 const produtoDb = produtosDb.find((db) => db.id === p.produtoId);
-                const subtotal = produtoDb.preco * p.quantidade;
-                valorTotal += subtotal;
+                const itemSubtotal = produtoDb.preco * p.quantidade;
+                subtotal += itemSubtotal;
+                return {
+                    produtoId: p.produtoId,
+                    quantidade: p.quantidade,
+                    precoUnitario: produtoDb.preco,
+                };
+            });
+            const taxaEntrega = estabelecimento.taxaEntrega || 0;
+            const totalCalculado = subtotal + taxaEntrega;
+            if (Math.abs(totalCalculado - totalCliente) > 0.01) {
+                res.status(400).json({ error: 'Total enviado não confere com o calculado.' });
+                return;
+            }
+            const pedido = await prisma.pedido.create({
+                data: {
+                    clienteId,
+                    estabelecimentoId,
+                    status: 'pendente',
+                    itens: { create: itensPedido },
+                },
+                include: { itens: true },
+            });
+            res.status(201).json({ success: true, orderId: pedido.id, total: totalCalculado, status: 'pendente' });
+        }
+        catch (error) {
+            res.status(400).json({ error: 'Erro ao confirmar pedido', details: error });
+        }
+    }
+    static async create(req, res) {
+        try {
+            const { clienteId, estabelecimentoId, produtos } = req.body;
+            if (!clienteId || !estabelecimentoId || !produtos || !Array.isArray(produtos) || produtos.length === 0) {
+                res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
+                return;
+            }
+            let subtotal = 0;
+            const produtosDb = await prisma.produto.findMany({ where: { id: { in: produtos.map((p) => p.produtoId) }, estabelecimentoId } });
+            const itensPedido = produtos.map((p) => {
+                const produtoDb = produtosDb.find((db) => db.id === p.produtoId);
+                if (!produtoDb)
+                    throw new Error('Produto não encontrado');
+                subtotal += produtoDb.preco * p.quantidade;
                 return {
                     produtoId: p.produtoId,
                     quantidade: p.quantidade,
@@ -45,118 +100,14 @@ class PedidoController {
                     clienteId,
                     estabelecimentoId,
                     status: 'pendente',
-                    itens: {
-                        create: itensPedido,
-                    },
+                    itens: { create: itensPedido },
                 },
                 include: { itens: true },
             });
-            res.status(201).json({ ...pedido, valorTotal });
-            return;
+            res.status(201).json(pedido);
         }
         catch (error) {
             res.status(400).json({ error: 'Erro ao criar pedido', details: error });
-            return;
-        }
-    }
-    static async getAll(req, res) {
-        try {
-            const pedidos = await prisma.pedido.findMany({
-                include: { itens: true },
-            });
-            res.json(pedidos);
-            return;
-        }
-        catch (error) {
-            res.status(500).json({ error: 'Erro ao buscar pedidos', details: error });
-            return;
-        }
-    }
-    static async getById(req, res) {
-        try {
-            const { id } = req.params;
-            const pedido = await prisma.pedido.findUnique({
-                where: { id: Number(id) },
-                include: { itens: true },
-            });
-            if (!pedido) {
-                res.status(404).json({ error: 'Pedido não encontrado' });
-                return;
-            }
-            res.json(pedido);
-            return;
-        }
-        catch (error) {
-            res.status(500).json({ error: 'Erro ao buscar pedido', details: error });
-            return;
-        }
-    }
-    static async update(req, res) {
-        try {
-            const { id } = req.params;
-            const parse = pedidoSchema.safeParse(req.body);
-            if (!parse.success) {
-                res.status(400).json({ error: 'Dados inválidos', details: parse.error.errors });
-                return;
-            }
-            const { clienteId, estabelecimentoId, produtos } = parse.data;
-            const pedido = await prisma.pedido.findUnique({ where: { id: Number(id) } });
-            if (!pedido) {
-                res.status(404).json({ error: 'Pedido não encontrado' });
-                return;
-            }
-            // Atualiza o pedido e os itens
-            // Buscar os produtos para obter o precoUnitario
-            const produtosDb = await prisma.produto.findMany({
-                where: { id: { in: produtos.map(p => p.produtoId) }, estabelecimentoId },
-            });
-            if (produtosDb.length !== produtos.length) {
-                res.status(400).json({ error: 'Um ou mais produtos não encontrados para este estabelecimento' });
-                return;
-            }
-            const itensPedido = produtos.map((p) => {
-                const produtoDb = produtosDb.find((db) => db.id === p.produtoId);
-                return {
-                    produtoId: p.produtoId,
-                    quantidade: p.quantidade,
-                    precoUnitario: produtoDb.preco,
-                };
-            });
-            const pedidoAtualizado = await prisma.pedido.update({
-                where: { id: Number(id) },
-                data: {
-                    clienteId,
-                    estabelecimentoId,
-                    itens: {
-                        deleteMany: {}, // Remove todos os itens existentes
-                        create: itensPedido,
-                    },
-                },
-                include: { itens: true },
-            });
-            res.json(pedidoAtualizado);
-            return;
-        }
-        catch (error) {
-            res.status(400).json({ error: 'Erro ao atualizar pedido', details: error });
-            return;
-        }
-    }
-    static async delete(req, res) {
-        try {
-            const { id } = req.params;
-            const pedido = await prisma.pedido.findUnique({ where: { id: Number(id) } });
-            if (!pedido) {
-                res.status(404).json({ error: 'Pedido não encontrado' });
-                return;
-            }
-            await prisma.pedido.delete({ where: { id: Number(id) } });
-            res.status(204).send();
-            return;
-        }
-        catch (error) {
-            res.status(500).json({ error: 'Erro ao deletar pedido', details: error });
-            return;
         }
     }
     static async listByCliente(req, res) {
@@ -164,14 +115,16 @@ class PedidoController {
             const { clienteId } = req.params;
             const pedidos = await prisma.pedido.findMany({
                 where: { clienteId: Number(clienteId) },
-                include: { itens: true },
+                include: {
+                    itens: { include: { produto: true } },
+                    estabelecimento: { select: { nome: true } },
+                },
             });
+            console.log('Pedidos retornados pelo Prisma:', JSON.stringify(pedidos, null, 2));
             res.json(pedidos);
-            return;
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao buscar pedidos do cliente', details: error });
-            return;
         }
     }
     static async listByEstabelecimento(req, res) {
@@ -179,14 +132,15 @@ class PedidoController {
             const { estabelecimentoId } = req.params;
             const pedidos = await prisma.pedido.findMany({
                 where: { estabelecimentoId: Number(estabelecimentoId) },
-                include: { itens: true },
+                include: {
+                    itens: { include: { produto: true } },
+                    estabelecimento: { select: { nome: true } },
+                },
             });
             res.json(pedidos);
-            return;
         }
         catch (error) {
             res.status(500).json({ error: 'Erro ao buscar pedidos do estabelecimento', details: error });
-            return;
         }
     }
     static async updateStatus(req, res) {
@@ -219,11 +173,9 @@ class PedidoController {
             });
             notification_service_1.NotificationService.notifyPedidoStatusChange(pedido.id, pedido.status, novoStatus);
             res.json(pedidoAtualizado);
-            return;
         }
         catch (error) {
             res.status(400).json({ error: 'Erro ao atualizar status do pedido', details: error });
-            return;
         }
     }
 }

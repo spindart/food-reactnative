@@ -1,2 +1,9 @@
 node_modules
 .env
+test-mercadopago.sh
+test-cartoes-oficiais.sh
+test-detection-completo.js
+test-detection.js
+test-fluxo-completo.sh
+test-mastercard-debug.js
+test-mastercard-especifico.sh

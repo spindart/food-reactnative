@@ -7,29 +7,8 @@ import { useCart } from '../context/CartContext';
 import { getCurrentUser } from '../services/currentUserService';
 import { useRoute } from '@react-navigation/native';
 import { iniciarPagamentoPix, consultarStatusPagamento } from '../services/pixService';
-import { createCardPayment, getCardPaymentStatus, CardPaymentResponse } from '../services/cardPaymentService';
+import { createCardPayment, getCardPaymentStatus, generateCardToken, CardPaymentResponse } from '../services/cardPaymentService';
 
-// Função para gerar token de cartão de teste Mercado Pago
-async function gerarTokenCartao({ cardNumber, cardExp, cardCvv, cardName }: { cardNumber: string; cardExp: string; cardCvv: string; cardName: string }) {
-  const [expMonth, expYear] = cardExp.split('/');
-  const body = {
-    card_number: cardNumber.replace(/\s/g, ''),
-    expiration_month: Number(expMonth),
-    expiration_year: Number('20' + expYear),
-    security_code: cardCvv,
-    cardholder: {
-      name: cardName,
-    },
-  };
-  const res = await fetch('https://api.mercadopago.com/v1/card_tokens?public_key=TEST-9fdac427-5ed4-4ab2-96a2-83f6240a4138', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error('Erro ao gerar token do cartão');
-  const data = await res.json();
-  return data.id;
-}
 import * as Clipboard from 'expo-clipboard';
 import { Animated } from 'react-native';
 
@@ -67,6 +46,43 @@ const CheckoutScreen: React.FC = () => {
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
   const [cardExp, setCardExp] = useState('');
+  
+  // Função para formatar data de expiração com validação
+  const formatCardExp = (text: string) => {
+    // Remove tudo que não é número
+    const numbers = text.replace(/\D/g, '');
+    
+    // Limita a 4 dígitos
+    const limited = numbers.substring(0, 4);
+    
+    // Se tem pelo menos 2 dígitos, adiciona a barra
+    if (limited.length >= 2) {
+      const month = limited.substring(0, 2);
+      const year = limited.substring(2);
+      
+      // Valida o mês em tempo real
+      if (month.length === 2) {
+        const monthNum = parseInt(month, 10);
+        if (monthNum > 12) {
+          // Se o mês for maior que 12, ajusta para 12
+          return '12/' + year;
+        }
+        if (monthNum === 0) {
+          // Se o mês for 0, ajusta para 01
+          return '01/' + year;
+        }
+      }
+      
+      return month + '/' + year;
+    }
+    return limited;
+  };
+
+  // Função para validar mês
+  const validateMonth = (month: string) => {
+    const monthNum = parseInt(month, 10);
+    return monthNum >= 1 && monthNum <= 12;
+  };
   const [cardCvv, setCardCvv] = useState('');
   const [cardError, setCardError] = useState('');
   const [paymentResponse, setPaymentResponse] = useState<any>(null);
@@ -190,7 +206,7 @@ const CheckoutScreen: React.FC = () => {
         const pixResp = await iniciarPagamentoPix({
           amount: Number(calculateTotal()),
           description: `Pedido em ${estabelecimentoId}`,
-          payerEmail: 'test_user_882153306740827176@testuser.com', // Trocar pelo e-mail real do usuário
+          payerEmail: 'teste@teste.com', // Email válido para testes
         });
         setPaymentResponse(pixResp);
         setPixPaymentId(pixResp.paymentId);
@@ -210,6 +226,31 @@ const CheckoutScreen: React.FC = () => {
         setShowCardModal(true);
         return;
       }
+      
+      // Validação da data de expiração
+      const expParts = cardExp.split('/');
+      if (expParts.length !== 2 || expParts[0].length !== 2 || expParts[1].length !== 2) {
+        setCardError('Data de expiração inválida. Use MM/AA');
+        setShowCardModal(true);
+        return;
+      }
+      
+      const expMonth = parseInt(expParts[0], 10);
+      const expYear = parseInt(expParts[1], 10);
+      
+      if (expMonth < 1 || expMonth > 12) {
+        setCardError('Mês inválido. Use um valor entre 01 e 12');
+        setShowCardModal(true);
+        return;
+      }
+      
+      const currentYear = new Date().getFullYear() % 100;
+      if (expYear < currentYear) {
+        setCardError('Cartão expirado. Verifique a data de validade');
+        setShowCardModal(true);
+        return;
+      }
+      
       setLoading(true);
       setError(null);
       setSuccess(null);
@@ -220,25 +261,61 @@ const CheckoutScreen: React.FC = () => {
           return;
         }
         // Gerar token real do cartão de teste
-        const token = await gerarTokenCartao({ cardNumber, cardExp, cardCvv, cardName });
+        const token = await generateCardToken({ cardNumber, cardExp, cardCvv, cardName });
         // Detectar bandeira (visa/master/etc) pelo número
-        let paymentMethodId = 'visa';
-        if (/^5[1-5]/.test(cardNumber.replace(/\s/g, ''))) paymentMethodId = 'master';
+        let paymentMethodId = 'visa'; // Default
+        const cleanCardNumber = cardNumber.replace(/\s/g, '');
+        
+        console.log('Analisando cartão:', cleanCardNumber.substring(0, 6) + '****');
+        console.log('Testando regexes:');
+        console.log('  /^4/:', /^4/.test(cleanCardNumber));
+        console.log('  /^5[0-5]/:', /^5[0-5]/.test(cleanCardNumber));
+        console.log('  /^5067/:', /^5067/.test(cleanCardNumber));
+        console.log('  /^3[47]/:', /^3[47]/.test(cleanCardNumber));
+        
+        // Detecção melhorada de bandeiras com logs detalhados
+        if (/^4/.test(cleanCardNumber)) {
+          paymentMethodId = 'visa';
+          console.log('✅ Detectado: Visa (começa com 4)');
+        } else if (/^5[0-5]/.test(cleanCardNumber)) {
+          // Verificar se é Elo ou Mastercard
+          if (/^5067/.test(cleanCardNumber)) {
+            paymentMethodId = 'elo';
+            console.log('✅ Detectado: Elo (começa com 5067)');
+          } else {
+            paymentMethodId = 'master';
+            console.log('✅ Detectado: Mastercard (começa com 5[0-5])');
+          }
+        } else if (/^3[47]/.test(cleanCardNumber)) {
+          paymentMethodId = 'amex';
+          console.log('✅ Detectado: American Express (começa com 3[47])');
+        } else if (/^6/.test(cleanCardNumber)) {
+          paymentMethodId = 'hipercard';
+          console.log('✅ Detectado: Hipercard (começa com 6)');
+        } else if (/^3[0689]/.test(cleanCardNumber)) {
+          paymentMethodId = 'diners';
+          console.log('✅ Detectado: Diners (começa com 3[0689])');
+        } else {
+          console.log('⚠️ Bandeira não detectada, usando Visa como padrão');
+        }
+        
+        console.log('🎯 Bandeira final:', paymentMethodId, 'para cartão:', cleanCardNumber.substring(0, 4) + '****');
         // Chamar backend para criar pagamento
         const payload = {
           amount: Number(calculateTotal()),
           description: `Pedido em ${estabelecimentoId}`,
-          payerEmail: 'test_user_9116110696713408733@testuser.com', // e-mail do comprador de teste
+          payerEmail: 'teste@teste.com', // Email válido para testes
           token,
           installments: 1, // ou permitir escolha
           paymentMethodId,
           issuerId: undefined, // ou detectar
+          cardNumber: cleanCardNumber, // Enviar número para detecção no backend
         };
         console.log('Chamando createCardPayment', payload);
         let cardResp;
         try {
           cardResp = await createCardPayment(payload);
-        } catch (err) {
+        } catch (err: any) {
           console.log('Erro na chamada createCardPayment:', err);
           setError('Erro ao chamar backend: ' + (err?.message || err));
           setLoading(false);
@@ -295,7 +372,7 @@ const CheckoutScreen: React.FC = () => {
         quantidade: item.quantidade
       })),
       formaPagamento: pagamento,
-      valorTotal: Number(calculateTotal()), // ou 'total', conforme backend
+      valorTotal: Number(calculateTotal()), 
     };
     const response = await createOrder(payload);
     setSuccess('Pedido confirmado!');
@@ -441,7 +518,14 @@ const CheckoutScreen: React.FC = () => {
             <TextInput style={styles.input} placeholder="Número do cartão" keyboardType="numeric" value={cardNumber} onChangeText={setCardNumber} maxLength={19} />
             <TextInput style={styles.input} placeholder="Nome impresso no cartão" value={cardName} onChangeText={setCardName} />
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Validade (MM/AA)" value={cardExp} onChangeText={setCardExp} maxLength={5} />
+              <TextInput 
+                style={[styles.input, { flex: 1 }]} 
+                placeholder="Validade (MM/AA)" 
+                value={cardExp} 
+                onChangeText={(text) => setCardExp(formatCardExp(text))} 
+                maxLength={5}
+                keyboardType="numeric"
+              />
               <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVV" value={cardCvv} onChangeText={setCardCvv} maxLength={4} secureTextEntry />
             </View>
             {cardError ? <Text style={{ color: 'red', marginTop: 4 }}>{cardError}</Text> : null}

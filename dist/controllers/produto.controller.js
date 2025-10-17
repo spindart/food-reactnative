@@ -9,6 +9,7 @@ const produtoSchema = zod_1.z.object({
     descricao: zod_1.z.string().min(1, 'Descrição é obrigatória'),
     preco: zod_1.z.number().positive('Preço deve ser positivo'),
     estabelecimentoId: zod_1.z.number().int().positive('EstabelecimentoId deve ser um inteiro positivo'),
+    imagem: zod_1.z.string().optional().nullable(), // imagem opcional
 });
 class ProdutoController {
     static async create(req, res) {
@@ -18,7 +19,7 @@ class ProdutoController {
             return;
         }
         try {
-            const { nome, descricao, preco, estabelecimentoId } = parse.data;
+            const { nome, descricao, preco, estabelecimentoId, imagem } = parse.data;
             // Validação: só o dono do estabelecimento pode cadastrar produtos
             const user = req.user;
             const estabelecimento = await prisma.estabelecimento.findUnique({ where: { id: estabelecimentoId } });
@@ -32,7 +33,7 @@ class ProdutoController {
                 return;
             }
             const produto = await prisma.produto.create({
-                data: { nome, descricao, preco, estabelecimentoId },
+                data: { nome, descricao, preco, estabelecimentoId, imagem },
             });
             res.status(201).json(produto);
             return;
@@ -86,10 +87,10 @@ class ProdutoController {
         }
         try {
             const { id } = req.params;
-            const { nome, descricao, preco, estabelecimentoId } = parse.data;
+            const { nome, descricao, preco, estabelecimentoId, imagem } = parse.data;
             const produto = await prisma.produto.update({
                 where: { id: Number(id) },
-                data: { nome, descricao, preco, estabelecimentoId },
+                data: { nome, descricao, preco, estabelecimentoId, imagem },
             });
             res.json(produto);
             return;
@@ -111,6 +112,37 @@ class ProdutoController {
         catch (error) {
             res.status(400).json({ error: 'Erro ao deletar produto', details: error });
             return;
+        }
+    }
+    // Atualiza apenas a imagem do produto
+    static async updateImagem(req, res) {
+        try {
+            const { id } = req.params;
+            const { imagem } = req.body;
+            if (typeof imagem !== 'string' && imagem !== null) {
+                res.status(400).json({ error: 'Imagem deve ser uma string (URL/base64) ou null.' });
+                return;
+            }
+            // Validação: só o dono do estabelecimento pode editar imagem do produto
+            const user = req.user;
+            const produto = await prisma.produto.findUnique({ where: { id: Number(id) } });
+            if (!produto) {
+                res.status(404).json({ error: 'Produto não encontrado' });
+                return;
+            }
+            const estabelecimento = await prisma.estabelecimento.findUnique({ where: { id: produto.estabelecimentoId } });
+            if (!user || user.role !== 'dono' || estabelecimento?.donoId !== user.id) {
+                res.status(403).json({ error: 'Apenas o dono do estabelecimento pode editar a imagem do produto.' });
+                return;
+            }
+            const updated = await prisma.produto.update({
+                where: { id: Number(id) },
+                data: { imagem },
+            });
+            res.json(updated);
+        }
+        catch (error) {
+            res.status(400).json({ error: 'Erro ao atualizar imagem do produto', details: error });
         }
     }
 }
