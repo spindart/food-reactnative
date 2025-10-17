@@ -25,27 +25,57 @@ router.post('/pix', async function (req, res) {
 // POST /pagamento/cartao
 router.post('/cartao', async function (req, res) {
     console.log('Recebido /pagamento/cartao:', req.body);
-    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber } = req.body;
+    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode } = req.body;
     if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
         return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
     }
     try {
-        // Sempre detectar bandeira no backend para garantir precisão
-        let finalPaymentMethodId = paymentMethodId;
-        if (cardNumber) {
-            const detectedBrand = mercadopago_service_1.MercadoPagoService.detectCardBrand(cardNumber);
-            finalPaymentMethodId = detectedBrand;
-            console.log('Bandeira detectada no backend:', detectedBrand, 'para cartão:', cardNumber.substring(0, 6) + '****');
+        let payment;
+        if (usarCartaoSalvo && cartaoId) {
+            // Pagamento com cartão salvo - usando método oficial do MercadoPago
+            console.log('💳 Processando pagamento com cartão salvo:', cartaoId);
+            // Buscar dados do cartão no banco para obter customerId
+            const { PrismaClient } = require('@prisma/client');
+            const prisma = new PrismaClient();
+            const cartao = await prisma.cartao.findUnique({
+                where: { id: parseInt(cartaoId) },
+                include: { usuario: true }
+            });
+            if (!cartao || !cartao.usuario.mercadoPagoCustomerId) {
+                throw new Error('Cartão salvo não encontrado ou usuário sem customer ID');
+            }
+            payment = await mercadopago_service_1.MercadoPagoService.createPaymentWithSavedCard({
+                amount,
+                description,
+                payerEmail,
+                customerId: cartao.usuario.mercadoPagoCustomerId,
+                cardId: cartao.mercadoPagoCardId, // ID do cartão salvo no MercadoPago
+                securityCode: securityCode, // CVV fornecido pelo usuário
+                installments,
+                paymentMethodId: paymentMethodId
+            });
+            await prisma.$disconnect();
         }
-        const payment = await mercadopago_service_1.MercadoPagoService.createCardPayment({
-            amount,
-            description,
-            payerEmail,
-            token,
-            installments,
-            paymentMethodId: finalPaymentMethodId,
-            issuerId
-        });
+        else {
+            // Pagamento com cartão novo
+            console.log('💳 Processando pagamento com cartão novo');
+            // Sempre detectar bandeira no backend para garantir precisão
+            let finalPaymentMethodId = paymentMethodId;
+            if (cardNumber) {
+                const detectedBrand = mercadopago_service_1.MercadoPagoService.detectCardBrand(cardNumber);
+                finalPaymentMethodId = detectedBrand;
+                console.log('Bandeira detectada no backend:', detectedBrand, 'para cartão:', cardNumber.substring(0, 6) + '****');
+            }
+            payment = await mercadopago_service_1.MercadoPagoService.createCardPayment({
+                amount,
+                description,
+                payerEmail,
+                token,
+                installments,
+                paymentMethodId: finalPaymentMethodId,
+                issuerId
+            });
+        }
         return res.status(200).json(payment);
     }
     catch (error) {
@@ -73,6 +103,24 @@ router.post('/gerar-token-cartao', async function (req, res) {
         return res.status(500).json({
             error: error.message,
             details: 'Erro ao gerar token do cartão. Verifique os dados do cartão.'
+        });
+    }
+});
+router.post('/gerar-token-cartao-salvo', async function (req, res) {
+    console.log('Recebido /pagamento/gerar-token-cartao-salvo:', req.body);
+    const { cardId, securityCode } = req.body;
+    if (!cardId || !securityCode) {
+        return res.status(400).json({ error: 'cardId e securityCode são obrigatórios' });
+    }
+    try {
+        const token = await mercadopago_service_1.MercadoPagoService.generateSavedCardToken({ cardId, securityCode });
+        return res.status(200).json({ token });
+    }
+    catch (error) {
+        console.error('Erro no endpoint gerar-token-cartao-salvo:', error);
+        return res.status(500).json({
+            error: error.message,
+            details: error.message.includes('invalid') ? 'CVV inválido. Verifique o código de segurança.' : error.message
         });
     }
 });

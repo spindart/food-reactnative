@@ -34,6 +34,8 @@ model Usuario {
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
   pedidos          Pedido[]          @relation("ClientePedidos")
   addresses        Address[]
+  cartoes          Cartao[]
+  mercadoPagoCustomerId String?       @unique // ID do customer no MercadoPago
 }
 
 model Estabelecimento {
@@ -104,6 +106,21 @@ model Categoria {
   nome              String          @unique
   estabelecimentos   Estabelecimento[] @relation("EstabelecimentoCategorias")
   produtos          Produto[]       @relation("ProdutoCategorias")
+}
+
+model Cartao {
+  id                    Int      @id @default(autoincrement())
+  usuarioId             Int
+  usuario               Usuario  @relation(fields: [usuarioId], references: [id])
+  mercadoPagoCardId      String   @unique // ID do cartão no MercadoPago
+  lastFourDigits        String   // Últimos 4 dígitos
+  firstSixDigits        String   // Primeiros 6 dígitos
+  expirationMonth       Int      // Mês de expiração
+  expirationYear        Int      // Ano de expiração
+  paymentMethodId       String   // Bandeira (visa, master, etc)
+  isDefault             Boolean  @default(false) // Cartão padrão
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 enum Role {

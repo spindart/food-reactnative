@@ -16,6 +16,7 @@ const notification_service_1 = require("./services/notification.service");
 const address_routes_1 = __importDefault(require("./routes/address.routes"));
 const error_middleware_1 = require("./services/error.middleware");
 const avaliacao_routes_1 = __importDefault(require("./routes/avaliacao.routes"));
+const cartao_routes_1 = __importDefault(require("./routes/cartao.routes"));
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3000;
 app.use(express_1.default.json());
@@ -28,6 +29,7 @@ app.use('/api/usuarios', usuario_routes_1.default);
 app.use('/api/pagamento', pagamento_routes_1.default);
 app.use('/api/enderecos', address_routes_1.default);
 app.use('/api/categorias', categoria_routes_1.default);
+app.use('/api/cartoes', cartao_routes_1.default);
 app.get('/', (req, res) => {
     res.send('Hello, World!');
 });

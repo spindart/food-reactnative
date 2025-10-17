@@ -25,6 +25,12 @@ const PerfilScreen: React.FC = () => {
           <Text style={styles.buttonText}>Meus Endereços</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={styles.button}
+          onPress={() => navigation.navigate('MeusCartoes')}
+        >
+          <Text style={styles.buttonText}>Meus Cartões</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.logoutButton}
           onPress={async () => {
             await AsyncStorage.removeItem('jwtToken');

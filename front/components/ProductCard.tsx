@@ -20,14 +20,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ nome, preco, imagem, onAddToC
 
   return (
     <View style={styles.card}>
-      <Image source={{ uri: imagem }} style={styles.image} />
-      <Text style={styles.name}>{nome}</Text>
-      <Text style={styles.price}>R$ {preco.toFixed(2)}</Text>
-      <TouchableOpacity style={styles.button} onPress={onAddToCart}>
-        <Text style={styles.buttonText}>Adicionar ao carrinho</Text>
+      <TouchableOpacity onPress={handleViewDetails} activeOpacity={0.8}>
+        <Image source={{ uri: imagem }} style={styles.image} />
+        <View style={styles.content}>
+          <Text style={styles.name} numberOfLines={2}>{nome}</Text>
+          <Text style={styles.price}>R$ {preco.toFixed(2)}</Text>
+        </View>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.detailsButton} onPress={handleViewDetails}>
-        <Text style={styles.detailsButtonText}>Ver Detalhes</Text>
+      <TouchableOpacity style={styles.addButton} onPress={onAddToCart} activeOpacity={0.8}>
+        <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
     </View>
   );
@@ -36,73 +37,58 @@ const ProductCard: React.FC<ProductCardProps> = ({ nome, preco, imagem, onAddToC
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 0,
+    borderRadius: 16,
     margin: 8,
-    alignItems: 'flex-start',
     shadowColor: '#000',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 2,
-    width: 180,
+    elevation: 3,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#f1f1f1',
+    borderColor: '#f0f0f0',
+    position: 'relative',
+    width: 180,
   },
   image: {
     width: '100%',
-    height: 120,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    marginBottom: 0,
+    height: 140,
     resizeMode: 'cover',
     backgroundColor: '#f6f6f6',
   },
+  content: {
+    padding: 12,
+    paddingBottom: 16,
+  },
   name: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginTop: 10,
-    marginLeft: 12,
-    marginBottom: 2,
-    color: '#222',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    lineHeight: 20,
   },
   price: {
-    fontSize: 16,
-    color: '#e5293e',
-    marginLeft: 12,
-    marginBottom: 8,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#e5293e',
   },
-  button: {
+  addButton: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#e5293e',
-    paddingVertical: 8,
-    paddingHorizontal: 0,
-    borderRadius: 0,
-    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
+    shadowColor: '#e5293e',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  buttonText: {
+  addButtonText: {
     color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  detailsButton: {
-    marginTop: 0,
-    backgroundColor: '#fff',
-    paddingVertical: 8,
-    width: '100%',
-    alignItems: 'center',
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-    borderTopWidth: 1,
-    borderColor: '#f1f1f1',
-  },
-  detailsButtonText: {
-    color: '#e5293e',
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: 'bold',
   },
 });

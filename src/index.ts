@@ -11,6 +11,7 @@ import { initNotificationWebSocket } from './services/notification.service';
 import addressRoutes from './routes/address.routes';
 import { errorHandler } from './services/error.middleware';
 import avaliacaoRoutes from './routes/avaliacao.routes';
+import cartaoRoutes from './routes/cartao.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/pagamento', pagamentoRoutes);
 app.use('/api/enderecos', addressRoutes);
 app.use('/api/categorias', categoriaRoutes);
+app.use('/api/cartoes', cartaoRoutes);
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');

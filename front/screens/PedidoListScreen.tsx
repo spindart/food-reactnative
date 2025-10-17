@@ -4,6 +4,7 @@ import api from '../services/api';
 import { updateOrderStatus } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
 import EvaluationForm from '../components/EvaluationForm';
+import { useFocusEffect } from '@react-navigation/native';
 
 type Pedido = {
   id: string;
@@ -25,30 +26,33 @@ const PedidoListScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [pedidoAvaliado, setPedidoAvaliado] = useState<boolean>(false);
 
-  useEffect(() => {
-    const fetchPedidos = async () => {
-      try {
-        const user = await getCurrentUser();
-        if (!user?.id) {
-          setError('Usuário não autenticado.');
-          setLoading(false);
-          return;
-        }
-        const response = await api.get(`/pedidos/cliente/${user.id}`);
-        console.log('Resposta pedidos:', JSON.stringify(response.data, null, 2));
-        // Separa pedidos em atuais e históricos
-        const pedidosAtuais = response.data.filter((p: any) => p.status !== 'entregue' && p.status !== 'cancelado');
-        const pedidosHistorico = response.data.filter((p: any) => p.status === 'entregue' || p.status === 'cancelado');
-        setPedidos([...pedidosAtuais, ...pedidosHistorico]);
-      } catch (err) {
-        setError('Erro ao carregar os pedidos.');
-      } finally {
+  const fetchPedidos = async () => {
+    try {
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        setError('Usuário não autenticado.');
         setLoading(false);
+        return;
       }
-    };
+      const response = await api.get(`/pedidos/cliente/${user.id}`);
+      console.log('Resposta pedidos:', JSON.stringify(response.data, null, 2));
+      // Separa pedidos em atuais e históricos
+      const pedidosAtuais = response.data.filter((p: any) => p.status !== 'entregue' && p.status !== 'cancelado');
+      const pedidosHistorico = response.data.filter((p: any) => p.status === 'entregue' || p.status === 'cancelado');
+      setPedidos([...pedidosAtuais, ...pedidosHistorico]);
+    } catch (err) {
+      setError('Erro ao carregar os pedidos.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchPedidos();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      setLoading(true);
+      fetchPedidos();
+    }, [])
+  );
 
   const handleUpdateStatus = async (pedidoId: string) => {
     try {
@@ -94,6 +98,16 @@ const PedidoListScreen: React.FC = () => {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => {
           const statusInfo = statusMap[item.status] || { label: item.status, color: '#888', icon: '❔' };
+          const isPedidoAtual = item.status === 'pendente' || item.status === 'preparo';
+          
+          // Calcular total se não estiver disponível
+          let totalPedido = item.total;
+          if (!totalPedido && item.itens) {
+            totalPedido = item.itens.reduce((sum: number, itemPedido: any) => {
+              return sum + (itemPedido.precoUnitario * itemPedido.quantidade);
+            }, 0);
+          }
+          
           return (
             <TouchableOpacity onPress={async () => {
               setSelectedPedido(item);
@@ -111,7 +125,15 @@ const PedidoListScreen: React.FC = () => {
                 setPedidoAvaliado(false);
               }
             }}>
-              <View style={styles.card}>
+              <View style={[
+                styles.card,
+                isPedidoAtual && styles.cardAtual
+              ]}>
+                {isPedidoAtual && (
+                  <View style={styles.badgeAtual}>
+                    <Text style={styles.badgeText}>PEDIDO EM ANDAMENTO</Text>
+                  </View>
+                )}
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   {item.estabelecimento?.imagem ? (
                     <Image source={{ uri: item.estabelecimento.imagem }} style={styles.estabImage} />
@@ -123,7 +145,9 @@ const PedidoListScreen: React.FC = () => {
                     <Text style={styles.id}>Pedido ID: {item.id}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontWeight: 'bold', color: '#222', fontSize: 16 }}>R$ {item.total?.toFixed(2) ?? '--'}</Text>
+                    <Text style={[styles.total, isPedidoAtual && styles.totalAtual]}>
+                      R$ {totalPedido?.toFixed(2) ?? '--'}
+                    </Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 16, marginBottom: 2 }}>
@@ -143,21 +167,26 @@ const PedidoListScreen: React.FC = () => {
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 24, width: '90%', maxHeight: '80%' }}>
-            <ScrollView>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 8 }}>Detalhes do Pedido</Text>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalhes do Pedido</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
               {selectedPedido && (
                 <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={styles.estabelecimentoInfo}>
                     {selectedPedido.estabelecimento?.imagem ? (
                       <Image source={{ uri: selectedPedido.estabelecimento.imagem }} style={styles.estabImageModal} />
                     ) : (
                       <Image source={require('../assets/icon.png')} style={styles.estabImageModal} />
                     )}
-                    <View style={{ marginLeft: 10 }}>
-                      <Text style={{ fontWeight: 'bold', fontSize: 18 }}>{selectedPedido.estabelecimento?.nome || 'Estabelecimento'}</Text>
-                      <Text style={{ color: '#888', fontSize: 13 }}>Pedido ID: {selectedPedido.id}</Text>
+                    <View style={styles.estabelecimentoDetails}>
+                      <Text style={styles.estabelecimentoNome}>{selectedPedido.estabelecimento?.nome || 'Estabelecimento'}</Text>
+                      <Text style={styles.pedidoId}>Pedido #{selectedPedido.id}</Text>
                     </View>
                   </View>
                   <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Status: <Text style={{ color: statusMap[selectedPedido.status]?.color || '#888' }}>{statusMap[selectedPedido.status]?.label || selectedPedido.status}</Text></Text>
@@ -165,41 +194,92 @@ const PedidoListScreen: React.FC = () => {
                   {selectedPedido.formaPagamento && (
                     <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Forma de Pagamento: <Text style={{ fontWeight: 'normal' }}>{selectedPedido.formaPagamento}</Text></Text>
                   )}
-                  <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Detalhe do pedido:</Text>
+                  <Text style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Itens do pedido:</Text>
                   {selectedPedido.itens && selectedPedido.itens.length > 0 ? (
-                    selectedPedido.itens.map((item, idx) => (
-                      <Text key={idx} style={{ marginLeft: 12, marginBottom: 2 }}>- {item.quantidade}x {item.produto?.nome || 'Produto'} (R$ {item.precoUnitario?.toFixed(2)})</Text>
-                    ))
+                    selectedPedido.itens.map((item, idx) => {
+                      const itemTotal = item.precoUnitario * item.quantidade;
+                      return (
+                        <View key={idx} style={styles.itemPedido}>
+                          <View style={styles.itemInfo}>
+                            <Text style={styles.itemNome}>{item.quantidade}x {item.produto?.nome || 'Produto'}</Text>
+                            <Text style={styles.itemPreco}>R$ {item.precoUnitario?.toFixed(2)}</Text>
+                          </View>
+                          <Text style={styles.itemTotal}>R$ {itemTotal.toFixed(2)}</Text>
+                        </View>
+                      );
+                    })
                   ) : (
                     <Text style={{ marginLeft: 12, marginBottom: 2 }}>Produtos não disponíveis</Text>
                   )}
-                  <Text style={{ fontWeight: 'bold', marginTop: 8 }}>Total: <Text style={{ fontWeight: 'normal' }}>R$ {selectedPedido.total?.toFixed(2) ?? '--'}</Text></Text>
-                  <View style={{ marginTop: 16 }}>
-                    <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 6 }}>Avalie seu pedido:</Text>
-                    {pedidoAvaliado ? (
-                      <Text style={{ color: '#2ecc71', fontWeight: 'bold' }}>Você já avaliou este pedido.</Text>
-                    ) : (
-                      <EvaluationForm onSubmit={async (nota, comentario) => {
-                        if (!selectedPedido) return;
-                        try {
-                          await api.post('/avaliacoes/avaliar', {
-                            pedidoId: selectedPedido.id,
-                            nota,
-                            comentario,
-                          });
-                          alert('Avaliação enviada com sucesso!');
-                          setPedidoAvaliado(true);
-                        } catch (err) {
-                          alert('Erro ao enviar avaliação.');
-                        }
-                      }} />
-                    )}
-                  </View>
+                  
+                  {/* Cálculo do total correto */}
+                  {selectedPedido.itens && selectedPedido.itens.length > 0 && (
+                    <View style={styles.totalContainer}>
+                      <View style={styles.totalLine}>
+                        <Text style={styles.totalLabel}>Subtotal:</Text>
+                        <Text style={styles.totalValue}>
+                          R$ {selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0).toFixed(2)}
+                        </Text>
+                      </View>
+                      <View style={styles.totalLine}>
+                        <Text style={styles.totalLabel}>Taxa de entrega:</Text>
+                        <Text style={styles.totalValue}>R$ 5,00</Text>
+                      </View>
+                      <View style={[styles.totalLine, styles.totalFinal]}>
+                        <Text style={styles.totalFinalLabel}>Total:</Text>
+                        <Text style={styles.totalFinalValue}>
+                          R$ {(selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + 5).toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  {/* Avaliação - somente para pedidos entregues */}
+                  {selectedPedido.status === 'entregue' && (
+                    <View style={styles.avaliacaoContainer}>
+                      <Text style={styles.avaliacaoTitle}>Avalie seu pedido:</Text>
+                      {pedidoAvaliado ? (
+                        <View style={styles.avaliacaoJaFeita}>
+                          <Text style={styles.avaliacaoJaFeitaText}>✅ Você já avaliou este pedido.</Text>
+                        </View>
+                      ) : (
+                        <EvaluationForm onSubmit={async (nota, comentario) => {
+                          if (!selectedPedido) return;
+                          try {
+                            await api.post('/avaliacoes/avaliar', {
+                              pedidoId: selectedPedido.id,
+                              nota,
+                              comentario,
+                            });
+                            alert('Avaliação enviada com sucesso!');
+                            setPedidoAvaliado(true);
+                          } catch (err) {
+                            alert('Erro ao enviar avaliação.');
+                          }
+                        }} />
+                      )}
+                    </View>
+                  )}
+                  
+                  {/* Status específico para pedidos em andamento */}
+                  {selectedPedido.status === 'pendente' && (
+                    <View style={styles.statusContainer}>
+                      <Text style={styles.statusText}>⏳ Aguardando aceitação do estabelecimento!</Text>
+                    </View>
+                  )}
+                  
+                  {selectedPedido.status === 'preparo' && (
+                    <View style={styles.statusContainer}>
+                      <Text style={styles.statusText}>🍳 Seu pedido está sendo preparado!</Text>
+                    </View>
+                  )}
+                  
+                  {selectedPedido.status === 'entregue' && (
+                    <View style={styles.statusContainer}>
+                      <Text style={styles.statusText}>✅ Pedido entregue com sucesso!</Text>
+                    </View>
+                  )}
                 </>
               )}
-              <TouchableOpacity style={{ marginTop: 18, alignSelf: 'center' }} onPress={() => setModalVisible(false)}>
-                <Text style={{ color: '#e5293e', fontWeight: 'bold', fontSize: 16 }}>Fechar</Text>
-              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -254,6 +334,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#f1f1f1',
   },
+  cardAtual: {
+    borderColor: '#e5293e',
+    borderWidth: 2,
+    backgroundColor: '#fff5f5',
+  },
+  badgeAtual: {
+    backgroundColor: '#e5293e',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    marginLeft: 16,
+    marginTop: 8,
+    borderRadius: 12,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  total: {
+    fontWeight: 'bold',
+    color: '#222',
+    fontSize: 16,
+  },
+  totalAtual: {
+    color: '#e5293e',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
   id: {
     fontSize: 17,
     fontWeight: 'bold',
@@ -288,6 +398,176 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  // Estilos para detalhes do pedido (estilo iFood)
+  itemPedido: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemNome: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 2,
+  },
+  itemPreco: {
+    fontSize: 14,
+    color: '#666',
+  },
+  itemTotal: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#e5293e',
+  },
+  totalContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  totalLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  totalFinal: {
+    borderTopWidth: 1,
+    borderTopColor: '#dee2e6',
+    paddingTop: 8,
+    marginTop: 8,
+    marginBottom: 0,
+  },
+  totalFinalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  totalFinalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#e5293e',
+  },
+  avaliacaoContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  avaliacaoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  avaliacaoJaFeita: {
+    backgroundColor: '#d4edda',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  avaliacaoJaFeitaText: {
+    color: '#155724',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  statusContainer: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#bbdefb',
+  },
+  statusText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1976d2',
+    textAlign: 'center',
+  },
+  // Estilos do modal (estilo iFood)
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '85%',
+    minHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  estabelecimentoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  estabelecimentoDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  estabelecimentoNome: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  pedidoId: {
+    fontSize: 14,
+    color: '#666',
   },
 });
 

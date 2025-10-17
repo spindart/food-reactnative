@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Pressable, Image, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Pressable, Image, ActivityIndicator, Alert } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { createOrder } from '../services/orderService';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
 import { useCart } from '../context/CartContext';
 import { getCurrentUser } from '../services/currentUserService';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { iniciarPagamentoPix, consultarStatusPagamento } from '../services/pixService';
-import { createCardPayment, getCardPaymentStatus, generateCardToken, CardPaymentResponse } from '../services/cardPaymentService';
+import { createCardPayment, getCardPaymentStatus, generateCardToken, generateSavedCardToken, CardPaymentResponse } from '../services/cardPaymentService';
+import { getCartoes, getCartaoPadrao, Cartao, adicionarCartao } from '../services/cartaoService';
 
 import * as Clipboard from 'expo-clipboard';
 import { Animated } from 'react-native';
@@ -15,6 +16,7 @@ import { Animated } from 'react-native';
 const CheckoutScreen: React.FC = () => {
   const { state: cartState, dispatch } = useCart();
   const route = useRoute<any>();
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -93,11 +95,36 @@ const CheckoutScreen: React.FC = () => {
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const [taxaEntrega, setTaxaEntrega] = useState(0);
+  
+  // Estados para cartões salvos
+  const [cartoesSalvos, setCartoesSalvos] = useState<Cartao[]>([]);
+  const [cartaoSelecionado, setCartaoSelecionado] = useState<Cartao | null>(null);
+  const [usarCartaoSalvo, setUsarCartaoSalvo] = useState(false);
+  const [showCardSelectionModal, setShowCardSelectionModal] = useState(false);
+  const [savedCardCvv, setSavedCardCvv] = useState('');
 
   React.useEffect(() => {
-    getCurrentUser().then((user) => {
+    getCurrentUser().then(async (user) => {
       setUserId(user?.id ? String(user.id) : null);
+      
+      // Carregar cartões salvos
+      if (user?.id) {
+        try {
+          const cartoes = await getCartoes(user.id);
+          setCartoesSalvos(cartoes);
+          
+          // Definir cartão padrão se existir
+          if (cartoes.length > 0) {
+            const cartaoPadrao = cartoes.find(c => c.isDefault) || cartoes[0];
+            setCartaoSelecionado(cartaoPadrao);
+            setUsarCartaoSalvo(true);
+          }
+        } catch (error) {
+          console.log('Erro ao carregar cartões salvos:', error);
+        }
+      }
     });
+    
     // Descobrir o estabelecimento do primeiro item do carrinho
     let estId = route.params?.estabelecimentoId;
     if (!estId && cartState.items.length > 0) {
@@ -190,6 +217,101 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
+  // Função para salvar cartão
+  const handleSalvarCartao = async () => {
+    console.log('🔄 handleSalvarCartao chamado');
+    console.log('📝 Dados do cartão:', { cardNumber, cardName, cardExp, cardCvv });
+    
+    if (!cardNumber || !cardName || !cardExp || !cardCvv) {
+      console.log('❌ Campos obrigatórios ausentes');
+      setCardError('Preencha todos os campos');
+      return;
+    }
+
+    // Validação da data de expiração
+    const expParts = cardExp.split('/');
+    if (expParts.length !== 2 || expParts[0].length !== 2 || expParts[1].length !== 2) {
+      setCardError('Data de expiração inválida. Use MM/AA');
+      return;
+    }
+    
+    const expMonth = parseInt(expParts[0], 10);
+    const expYear = parseInt(expParts[1], 10);
+    
+    if (expMonth < 1 || expMonth > 12) {
+      setCardError('Mês inválido. Use um valor entre 01 e 12');
+      return;
+    }
+    
+    const currentYear = new Date().getFullYear() % 100;
+    if (expYear < currentYear) {
+      setCardError('Cartão expirado. Verifique a data de validade');
+      return;
+    }
+
+    try {
+      console.log('🚀 Iniciando salvamento do cartão');
+      setLoading(true);
+      setCardError('');
+
+      const user = await getCurrentUser();
+      console.log('👤 Usuário obtido:', user);
+      if (!user?.id) {
+        console.log('❌ Usuário não autenticado');
+        setCardError('Usuário não autenticado');
+        return;
+      }
+
+      // Gerar token do cartão
+      console.log('🔑 Gerando token do cartão...');
+      const token = await generateCardToken({ cardNumber, cardExp, cardCvv, cardName });
+      console.log('✅ Token gerado:', token);
+
+      // Adicionar cartão
+      console.log('💳 Chamando adicionarCartao...');
+      const response = await adicionarCartao({
+        usuarioId: user.id,
+        token,
+        cardNumber,
+        cardExp,
+        cardCvv,
+        cardName
+      });
+      console.log('✅ Resposta do adicionarCartao:', response);
+
+      // Recarregar cartões salvos
+      const cartoes = await getCartoes(user.id);
+      console.log('✅ Cartões recarregados:', cartoes);
+      setCartoesSalvos(cartoes);
+      
+      // Definir o novo cartão como selecionado e padrão
+      setCartaoSelecionado(response.cartao);
+      setUsarCartaoSalvo(true);
+      console.log('✅ Novo cartão definido como padrão:', response.cartao);
+      
+      // Fechar modal e limpar campos
+      setShowCardModal(false);
+      setCardNumber('');
+      setCardName('');
+      setCardExp('');
+      setCardCvv('');
+      
+      setSuccess('Cartão salvo com sucesso!');
+      
+      // Limpar mensagem de sucesso após 3 segundos
+      setTimeout(() => setSuccess(null), 3000);
+      
+    } catch (err: any) {
+      console.log('❌ ERRO ao salvar cartão:', err);
+      console.log('❌ Erro message:', err.message);
+      console.log('❌ Erro stack:', err.stack);
+      setCardError(err.message || 'Erro ao salvar cartão');
+    } finally {
+      console.log('🏁 Finalizando salvamento do cartão');
+      setLoading(false);
+    }
+  };
+
   const handleConfirmOrder = async () => {
   console.log('handleConfirmOrder chamado', { pagamento, cardNumber, cardName, cardExp, cardCvv });
     if (pagamento === 'pix') {
@@ -220,35 +342,57 @@ const CheckoutScreen: React.FC = () => {
       return;
     }
     if (pagamento === 'cartao') {
-      // Validação simples
-      if (!cardNumber || !cardName || !cardExp || !cardCvv) {
-        setCardError('Preencha todos os dados do cartão.');
-        setShowCardModal(true);
+      // Se tem cartões salvos e não está usando cartão salvo, mostrar modal de seleção
+      if (cartoesSalvos.length > 0 && !usarCartaoSalvo) {
+        setShowCardSelectionModal(true);
         return;
       }
       
-      // Validação da data de expiração
-      const expParts = cardExp.split('/');
-      if (expParts.length !== 2 || expParts[0].length !== 2 || expParts[1].length !== 2) {
-        setCardError('Data de expiração inválida. Use MM/AA');
-        setShowCardModal(true);
+      // Se está usando cartão salvo, validar se tem cartão selecionado e CVV
+      if (usarCartaoSalvo && !cartaoSelecionado) {
+        setError('Selecione um cartão para pagar.');
         return;
       }
       
-      const expMonth = parseInt(expParts[0], 10);
-      const expYear = parseInt(expParts[1], 10);
-      
-      if (expMonth < 1 || expMonth > 12) {
-        setCardError('Mês inválido. Use um valor entre 01 e 12');
-        setShowCardModal(true);
+      if (usarCartaoSalvo && !savedCardCvv) {
+        setError('Digite o CVV do cartão selecionado.');
+        setShowCardSelectionModal(true);
         return;
       }
       
-      const currentYear = new Date().getFullYear() % 100;
-      if (expYear < currentYear) {
-        setCardError('Cartão expirado. Verifique a data de validade');
-        setShowCardModal(true);
-        return;
+      // Se não está usando cartão salvo, validar dados do formulário
+      if (!usarCartaoSalvo) {
+        if (!cardNumber || !cardName || !cardExp || !cardCvv) {
+          setCardError('Preencha todos os dados do cartão.');
+          setShowCardModal(true);
+          return;
+        }
+      }
+      
+      // Validação da data de expiração (apenas para cartões novos)
+      if (!usarCartaoSalvo) {
+        const expParts = cardExp.split('/');
+        if (expParts.length !== 2 || expParts[0].length !== 2 || expParts[1].length !== 2) {
+          setCardError('Data de expiração inválida. Use MM/AA');
+          setShowCardModal(true);
+          return;
+        }
+        
+        const expMonth = parseInt(expParts[0], 10);
+        const expYear = parseInt(expParts[1], 10);
+        
+        if (expMonth < 1 || expMonth > 12) {
+          setCardError('Mês inválido. Use um valor entre 01 e 12');
+          setShowCardModal(true);
+          return;
+        }
+        
+        const currentYear = new Date().getFullYear() % 100;
+        if (expYear < currentYear) {
+          setCardError('Cartão expirado. Verifique a data de validade');
+          setShowCardModal(true);
+          return;
+        }
       }
       
       setLoading(true);
@@ -260,46 +404,62 @@ const CheckoutScreen: React.FC = () => {
           setLoading(false);
           return;
         }
-        // Gerar token real do cartão de teste
-        const token = await generateCardToken({ cardNumber, cardExp, cardCvv, cardName });
-        // Detectar bandeira (visa/master/etc) pelo número
-        let paymentMethodId = 'visa'; // Default
-        const cleanCardNumber = cardNumber.replace(/\s/g, '');
+        let token: string;
+        let paymentMethodId: string;
+        let cleanCardNumber: string;
         
-        console.log('Analisando cartão:', cleanCardNumber.substring(0, 6) + '****');
-        console.log('Testando regexes:');
-        console.log('  /^4/:', /^4/.test(cleanCardNumber));
-        console.log('  /^5[0-5]/:', /^5[0-5]/.test(cleanCardNumber));
-        console.log('  /^5067/:', /^5067/.test(cleanCardNumber));
-        console.log('  /^3[47]/:', /^3[47]/.test(cleanCardNumber));
-        
-        // Detecção melhorada de bandeiras com logs detalhados
-        if (/^4/.test(cleanCardNumber)) {
-          paymentMethodId = 'visa';
-          console.log('✅ Detectado: Visa (começa com 4)');
-        } else if (/^5[0-5]/.test(cleanCardNumber)) {
-          // Verificar se é Elo ou Mastercard
-          if (/^5067/.test(cleanCardNumber)) {
-            paymentMethodId = 'elo';
-            console.log('✅ Detectado: Elo (começa com 5067)');
-          } else {
-            paymentMethodId = 'master';
-            console.log('✅ Detectado: Mastercard (começa com 5[0-5])');
-          }
-        } else if (/^3[47]/.test(cleanCardNumber)) {
-          paymentMethodId = 'amex';
-          console.log('✅ Detectado: American Express (começa com 3[47])');
-        } else if (/^6/.test(cleanCardNumber)) {
-          paymentMethodId = 'hipercard';
-          console.log('✅ Detectado: Hipercard (começa com 6)');
-        } else if (/^3[0689]/.test(cleanCardNumber)) {
-          paymentMethodId = 'diners';
-          console.log('✅ Detectado: Diners (começa com 3[0689])');
+        if (usarCartaoSalvo && cartaoSelecionado) {
+          // Usar cartão salvo - CONFORME DOCUMENTAÇÃO OFICIAL
+          console.log('💳 Usando cartão salvo:', cartaoSelecionado.lastFourDigits);
+          console.log('🔑 Enviando card_id + CVV para backend conforme documentação oficial...');
+          
+          // Para cartões salvos, não precisamos gerar token no frontend
+          // O backend irá gerar o token usando card_id + CVV conforme documentação oficial
+          token = cartaoSelecionado.mercadoPagoCardId; // Será usado como cardId no backend
+          paymentMethodId = cartaoSelecionado.paymentMethodId;
+          cleanCardNumber = cartaoSelecionado.firstSixDigits + '****' + cartaoSelecionado.lastFourDigits;
         } else {
-          console.log('⚠️ Bandeira não detectada, usando Visa como padrão');
+          // Gerar token para cartão novo
+          token = await generateCardToken({ cardNumber, cardExp, cardCvv, cardName });
+          // Detectar bandeira (visa/master/etc) pelo número
+          paymentMethodId = 'visa'; // Default
+          cleanCardNumber = cardNumber.replace(/\s/g, '');
+          
+          console.log('Analisando cartão:', cleanCardNumber.substring(0, 6) + '****');
+          console.log('Testando regexes:');
+          console.log('  /^4/:', /^4/.test(cleanCardNumber));
+          console.log('  /^5[0-5]/:', /^5[0-5]/.test(cleanCardNumber));
+          console.log('  /^5067/:', /^5067/.test(cleanCardNumber));
+          console.log('  /^3[47]/:', /^3[47]/.test(cleanCardNumber));
+          
+          // Detecção melhorada de bandeiras com logs detalhados
+          if (/^4/.test(cleanCardNumber)) {
+            paymentMethodId = 'visa';
+            console.log('✅ Detectado: Visa (começa com 4)');
+          } else if (/^5[0-5]/.test(cleanCardNumber)) {
+            // Verificar se é Elo ou Mastercard
+            if (/^5067/.test(cleanCardNumber)) {
+              paymentMethodId = 'elo';
+              console.log('✅ Detectado: Elo (começa com 5067)');
+            } else {
+              paymentMethodId = 'master';
+              console.log('✅ Detectado: Mastercard (começa com 5[0-5])');
+            }
+          } else if (/^3[47]/.test(cleanCardNumber)) {
+            paymentMethodId = 'amex';
+            console.log('✅ Detectado: American Express (começa com 3[47])');
+          } else if (/^6/.test(cleanCardNumber)) {
+            paymentMethodId = 'hipercard';
+            console.log('✅ Detectado: Hipercard (começa com 6)');
+          } else if (/^3[0689]/.test(cleanCardNumber)) {
+            paymentMethodId = 'diners';
+            console.log('✅ Detectado: Diners (começa com 3[0689])');
+          } else {
+            console.log('⚠️ Bandeira não detectada, usando Visa como padrão');
+          }
+          
+          console.log('🎯 Bandeira final:', paymentMethodId, 'para cartão:', cleanCardNumber.substring(0, 4) + '****');
         }
-        
-        console.log('🎯 Bandeira final:', paymentMethodId, 'para cartão:', cleanCardNumber.substring(0, 4) + '****');
         // Chamar backend para criar pagamento
         const payload = {
           amount: Number(calculateTotal()),
@@ -310,6 +470,9 @@ const CheckoutScreen: React.FC = () => {
           paymentMethodId,
           issuerId: undefined, // ou detectar
           cardNumber: cleanCardNumber, // Enviar número para detecção no backend
+          usarCartaoSalvo: usarCartaoSalvo,
+          cartaoId: cartaoSelecionado?.id,
+          securityCode: usarCartaoSalvo ? savedCardCvv : cardCvv, // CVV para cartões salvos ou novos
         };
         console.log('Chamando createCardPayment', payload);
         let cardResp;
@@ -372,11 +535,23 @@ const CheckoutScreen: React.FC = () => {
         quantidade: item.quantidade
       })),
       formaPagamento: pagamento,
-      valorTotal: Number(calculateTotal()), 
+      total: Number(calculateTotal()), // Corrigido: era valorTotal, agora é total
     };
-    const response = await createOrder(payload);
-    setSuccess('Pedido confirmado!');
-    dispatch({ type: 'CLEAR_CART' });
+    console.log('Criando pedido com payload:', payload);
+    try {
+      const response = await createOrder(payload);
+      console.log('Pedido criado com sucesso:', response);
+      setSuccess('Pedido confirmado!');
+      dispatch({ type: 'CLEAR_CART' });
+      
+      // Navegar para a tela de pedidos após 2 segundos
+      setTimeout(() => {
+        navigation.navigate('Pedidos' as never);
+      }, 2000);
+    } catch (error) {
+      console.error('Erro ao criar pedido:', error);
+      setError('Erro ao criar pedido após pagamento aprovado.');
+    }
   };
 
   return (
@@ -414,7 +589,14 @@ const CheckoutScreen: React.FC = () => {
         <TouchableOpacity style={[styles.payButton, pagamento === 'dinheiro' && styles.payButtonSelected]} onPress={() => setPagamento('dinheiro')}>
           <Text style={[styles.payButtonText, pagamento === 'dinheiro' && styles.payButtonTextSelected]}>Pagar na entrega</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.payButton, pagamento === 'cartao' && styles.payButtonSelected]} onPress={() => { setPagamento('cartao'); setShowCardModal(true); }}>
+        <TouchableOpacity style={[styles.payButton, pagamento === 'cartao' && styles.payButtonSelected]} onPress={() => { 
+          setPagamento('cartao'); 
+          if (cartoesSalvos.length > 0) {
+            setShowCardSelectionModal(true);
+          } else {
+            setShowCardModal(true);
+          }
+        }}>
           <Text style={[styles.payButtonText, pagamento === 'cartao' && styles.payButtonTextSelected]}>Cartão</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.payButton, pagamento === 'pix' && styles.payButtonSelected]} onPress={() => setPagamento('pix')}>
@@ -529,10 +711,137 @@ const CheckoutScreen: React.FC = () => {
               <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVV" value={cardCvv} onChangeText={setCardCvv} maxLength={4} secureTextEntry />
             </View>
             {cardError ? <Text style={{ color: 'red', marginTop: 4 }}>{cardError}</Text> : null}
-            <TouchableOpacity style={[styles.button, { marginTop: 12 }]} onPress={() => { setCardError(''); setShowCardModal(false); }}>
-              <Text style={styles.buttonText}>Salvar cartão</Text>
+            <TouchableOpacity 
+              style={[styles.button, { marginTop: 12 }]} 
+              onPress={handleSalvarCartao}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>
+                {loading ? 'Salvando...' : 'Salvar cartão'}
+              </Text>
             </TouchableOpacity>
-            <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => setShowCardModal(false)}>
+            <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => {
+              setShowCardModal(false);
+              setCardError('');
+              setCardNumber('');
+              setCardName('');
+              setCardExp('');
+              setCardCvv('');
+            }}>
+              <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de seleção de cartões salvos */}
+      <Modal visible={showCardSelectionModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 24, width: '90%', maxHeight: '80%' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 16, color: '#e5293e' }}>Selecionar Cartão</Text>
+            
+            {cartoesSalvos.length > 0 ? (
+              <FlatList
+                data={cartoesSalvos}
+                keyExtractor={(item) => item.id.toString()}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.cartaoOption,
+                      cartaoSelecionado?.id === item.id && styles.cartaoOptionSelected
+                    ]}
+                    onPress={() => setCartaoSelecionado(item)}
+                  >
+                    <View style={styles.cartaoOptionInfo}>
+                      <Text style={styles.cartaoOptionBandeira}>{item.paymentMethodId.toUpperCase()}</Text>
+                      <Text style={styles.cartaoOptionNumero}>****{item.lastFourDigits}</Text>
+                      <Text style={styles.cartaoOptionValidade}>
+                        {item.expirationMonth.toString().padStart(2, '0')}/{item.expirationYear.toString().slice(-2)}
+                      </Text>
+                    </View>
+                    {item.isDefault && (
+                      <Text style={styles.cartaoOptionPadrao}>PADRÃO</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+                style={{ maxHeight: 300 }}
+              />
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: '#666', fontSize: 16, marginBottom: 16 }}>
+                  Nenhum cartão salvo encontrado
+                </Text>
+                <Text style={{ color: '#999', fontSize: 14, textAlign: 'center' }}>
+                  Adicione um cartão para facilitar seus pagamentos futuros
+                </Text>
+              </View>
+            )}
+            
+            {/* Campo CVV para cartão salvo */}
+            {cartaoSelecionado && (
+              <View style={{ marginTop: 16 }}>
+                <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 8, color: '#333' }}>
+                  Código de Segurança (CVV)
+                </Text>
+                <TextInput
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#ddd',
+                    borderRadius: 8,
+                    padding: 12,
+                    fontSize: 16,
+                    backgroundColor: '#fff'
+                  }}
+                  placeholder="Digite o CVV"
+                  value={savedCardCvv}
+                  onChangeText={setSavedCardCvv}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  secureTextEntry
+                />
+                <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                  Por segurança, precisamos do CVV para processar o pagamento
+                </Text>
+              </View>
+            )}
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => {
+                  setUsarCartaoSalvo(false);
+                  setShowCardSelectionModal(false);
+                  setShowCardModal(true);
+                }}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Adicionar Novo Cartão</Text>
+              </TouchableOpacity>
+              
+              {cartaoSelecionado && (
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton, 
+                    styles.modalButtonPrimary,
+                    !savedCardCvv && { opacity: 0.5 }
+                  ]}
+                  onPress={() => {
+                    if (!savedCardCvv) {
+                      Alert.alert('Erro', 'Digite o CVV do cartão');
+                      return;
+                    }
+                    setUsarCartaoSalvo(true);
+                    setShowCardSelectionModal(false);
+                  }}
+                  disabled={!savedCardCvv}
+                >
+                  <Text style={styles.modalButtonTextPrimary}>
+                    Usar Cartão Selecionado
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => setShowCardSelectionModal(false)}>
               <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Cancelar</Text>
             </Pressable>
           </View>
@@ -667,6 +976,76 @@ const styles = StyleSheet.create({
     color: '#e5293e',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  // Estilos para modal de seleção de cartões
+  cartaoOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    marginBottom: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    backgroundColor: '#f8f9fa',
+  },
+  cartaoOptionSelected: {
+    borderColor: '#e5293e',
+    backgroundColor: '#fff5f5',
+  },
+  cartaoOptionInfo: {
+    flex: 1,
+  },
+  cartaoOptionBandeira: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  cartaoOptionNumero: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  cartaoOptionValidade: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+  },
+  cartaoOptionPadrao: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#e5293e',
+    backgroundColor: '#fff5f5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  modalActions: {
+    marginTop: 16,
+    gap: 8,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#e5293e',
+  },
+  modalButtonSecondary: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  modalButtonTextPrimary: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalButtonTextSecondary: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
 

@@ -24,9 +24,20 @@ export interface CardTokenPayload {
   cardName: string;
 }
 
+export interface SavedCardTokenPayload {
+  cardId: string;
+  securityCode: string;
+}
+
 export async function generateCardToken(payload: CardTokenPayload) {
   console.log('Chamando generateCardToken', { ...payload, cardNumber: payload.cardNumber.substring(0, 4) + '****' });
   const { data } = await api.post<{ token: string }>('/pagamento/gerar-token-cartao', payload);
+  return data.token;
+}
+
+export async function generateSavedCardToken(payload: SavedCardTokenPayload) {
+  console.log('Chamando generateSavedCardToken', { cardId: payload.cardId, securityCode: '***' });
+  const { data } = await api.post<{ token: string }>('/pagamento/gerar-token-cartao-salvo', payload);
   return data.token;
 }
 

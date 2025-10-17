@@ -19,6 +19,8 @@ const pedidoSchema = z.object({
 export class PedidoController {
   // Confirmação de pedido: POST /orders/confirm
   static async confirmOrder(req: Request, res: Response): Promise<void> {
+    console.log('Recebido pedido de confirmação:', req.body);
+    
     // Espera JSON:
     // {
     //   clienteId: number,
@@ -28,7 +30,11 @@ export class PedidoController {
     //   total: number
     // }
     const { clienteId, estabelecimentoId, produtos, formaPagamento, total: totalCliente } = req.body;
+    
+    console.log('Dados extraídos:', { clienteId, estabelecimentoId, produtos, formaPagamento, totalCliente });
+    
     if (!clienteId || !estabelecimentoId || !produtos || !Array.isArray(produtos) || produtos.length === 0 || !formaPagamento || typeof totalCliente !== 'number') {
+      console.log('Erro: Dados obrigatórios ausentes');
       res.status(400).json({ error: 'Dados obrigatórios ausentes.' });
       return;
     }
@@ -70,9 +76,35 @@ export class PedidoController {
           status: 'pendente',
           itens: { create: itensPedido },
         },
-        include: { itens: true },
+        include: { 
+          itens: { 
+            include: { produto: true } 
+          },
+          estabelecimento: {
+            select: { nome: true, imagem: true }
+          }
+        },
       });
-      res.status(201).json({ success: true, orderId: pedido.id, total: totalCalculado, status: 'pendente' });
+      
+      // Calcular total com base nos itens criados
+      const totalFinal = pedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + taxaEntrega;
+      
+      res.status(201).json({ 
+        success: true, 
+        orderId: pedido.id, 
+        total: totalFinal, 
+        status: 'pendente',
+        pedido: {
+          id: pedido.id,
+          clienteId: pedido.clienteId,
+          estabelecimentoId: pedido.estabelecimentoId,
+          status: pedido.status,
+          createdAt: pedido.createdAt,
+          total: totalFinal,
+          itens: pedido.itens,
+          estabelecimento: pedido.estabelecimento
+        }
+      });
     } catch (error) {
       res.status(400).json({ error: 'Erro ao confirmar pedido', details: error });
     }

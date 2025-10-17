@@ -10,7 +10,7 @@ type CreateOrderPayload = {
   estabelecimentoId: number;
   produtos: ProdutoPayload[];
   formaPagamento: string;
-  valorTotal: number;
+  total: number; // Corrigido: era valorTotal, agora é total
 };
 
 export const createOrder = async (payload: CreateOrderPayload) => {

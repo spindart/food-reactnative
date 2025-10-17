@@ -15,6 +15,7 @@ import CadastrarProdutoScreen from './screens/CadastrarProdutoScreen';
 import ProdutosDoEstabelecimentoScreen from './screens/ProdutosDoEstabelecimentoScreen';
 import EditarProdutoScreen from './screens/EditarProdutoScreen';
 import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoScreen';
+import MeusCartoesScreen from './screens/MeusCartoesScreen';
 import * as Notifications from 'expo-notifications';
 import { CartProvider, useCart } from './context/CartContext';
 
@@ -100,6 +101,7 @@ export default function App() {
           <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ title: 'Produtos do Estabelecimento' }} />
           <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
           <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
+          <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ title: 'Meus Cartões' }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>
