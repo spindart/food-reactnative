@@ -254,9 +254,11 @@ export class MercadoPagoService {
     }
   }
 
-  // Criar customer no MercadoPago
+  // Criar customer no MercadoPago - CONFORME DOCUMENTAÇÃO OFICIAL
   static async createCustomer(email: string): Promise<any> {
     try {
+      console.log('🔄 Criando customer no MercadoPago:', email);
+      
       const response = await axios.post(
         'https://api.mercadopago.com/v1/customers',
         { email },
@@ -272,19 +274,102 @@ export class MercadoPagoService {
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao criar customer no MercadoPago:', error.response?.data || error.message);
+      
+      // Se o customer já existe, buscar e retornar
+      if (error.response?.status === 400 && error.response?.data?.message?.includes('already exists')) {
+        console.log('🔄 Customer já existe, buscando...');
+        return await this.searchCustomerByEmail(email);
+      }
+      
       throw new Error(`Erro ao criar customer: ${error.response?.data?.message || error.message}`);
     }
   }
 
-  // Adicionar cartão ao customer no MercadoPago
-  static async addCardToCustomer(customerId: string, token: string, paymentMethodId: string): Promise<any> {
+  // Buscar customer por email - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async searchCustomerByEmail(email: string): Promise<any> {
     try {
+      console.log('🔄 Buscando customer por email:', email);
+      
+      const response = await axios.get(
+        `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(email)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+          },
+        }
+      );
+      
+      if (response.data.results && response.data.results.length > 0) {
+        console.log('✅ Customer encontrado:', response.data.results[0].id);
+        return response.data.results[0];
+      } else {
+        throw new Error('Customer não encontrado');
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar customer:', error.response?.data || error.message);
+      throw new Error(`Erro ao buscar customer: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Buscar customer por ID - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async getCustomerById(customerId: string): Promise<any> {
+    try {
+      console.log('🔄 Buscando customer por ID:', customerId);
+      
+      const response = await axios.get(
+        `https://api.mercadopago.com/v1/customers/${customerId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+          },
+        }
+      );
+      
+      console.log('✅ Customer encontrado:', response.data.id);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar customer por ID:', error.response?.data || error.message);
+      throw new Error(`Erro ao buscar customer: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Modificar customer - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async updateCustomer(customerId: string, updateData: { email?: string; first_name?: string; last_name?: string }): Promise<any> {
+    try {
+      console.log('🔄 Modificando customer:', customerId, updateData);
+      
+      const response = await axios.put(
+        `https://api.mercadopago.com/v1/customers/${customerId}`,
+        updateData,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      console.log('✅ Customer modificado:', response.data.id);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Erro ao modificar customer:', error.response?.data || error.message);
+      throw new Error(`Erro ao modificar customer: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Adicionar cartão ao customer - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async addCardToCustomer(customerId: string, token: string, paymentMethodId?: string): Promise<any> {
+    try {
+      console.log('🔄 Adicionando cartão ao customer:', customerId);
+      
+      const cardData: any = { token };
+      if (paymentMethodId) {
+        cardData.payment_method_id = paymentMethodId;
+      }
+      
       const response = await axios.post(
         `https://api.mercadopago.com/v1/customers/${customerId}/cards`,
-        { 
-          token,
-          payment_method_id: paymentMethodId
-        },
+        cardData,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
@@ -301,9 +386,11 @@ export class MercadoPagoService {
     }
   }
 
-  // Listar cartões do customer no MercadoPago
+  // Listar cartões do customer - CONFORME DOCUMENTAÇÃO OFICIAL
   static async getCustomerCards(customerId: string): Promise<any[]> {
     try {
+      console.log('🔄 Listando cartões do customer:', customerId);
+      
       const response = await axios.get(
         `https://api.mercadopago.com/v1/customers/${customerId}/cards`,
         {
@@ -318,6 +405,28 @@ export class MercadoPagoService {
     } catch (error: any) {
       console.error('❌ Erro ao obter cartões do customer:', error.response?.data || error.message);
       throw new Error(`Erro ao obter cartões: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Remover cartão do customer - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async removeCardFromCustomer(customerId: string, cardId: string): Promise<any> {
+    try {
+      console.log('🔄 Removendo cartão do customer:', customerId, cardId);
+      
+      const response = await axios.delete(
+        `https://api.mercadopago.com/v1/customers/${customerId}/cards/${cardId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+          },
+        }
+      );
+      
+      console.log('✅ Cartão removido do customer');
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Erro ao remover cartão do customer:', error.response?.data || error.message);
+      throw new Error(`Erro ao remover cartão: ${error.response?.data?.message || error.message}`);
     }
   }
 
@@ -339,19 +448,12 @@ export class MercadoPagoService {
         amount: paymentData.amount
       });
 
-      // Verificar se o customer existe
+      // Verificar se o customer existe usando o método correto
       try {
-        const customerResponse = await axios.get(
-          `https://api.mercadopago.com/v1/customers/${paymentData.customerId}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
-            },
-          }
-        );
-        console.log('✅ Customer encontrado:', customerResponse.data.id);
+        await this.getCustomerById(paymentData.customerId);
+        console.log('✅ Customer encontrado:', paymentData.customerId);
       } catch (customerError: any) {
-        console.error('❌ Customer não encontrado:', customerError.response?.data || customerError.message);
+        console.error('❌ Customer não encontrado:', customerError.message);
         throw new Error('Customer não encontrado no MercadoPago');
       }
 
@@ -391,115 +493,89 @@ export class MercadoPagoService {
 
       console.log('📤 Payload oficial enviado para MercadoPago:', JSON.stringify(payment, null, 2));
 
-      try {
-        const response = await axios.post(
-          'https://api.mercadopago.com/v1/payments',
-          payment,
-          {
-            headers: {
-              'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
-              'Content-Type': 'application/json',
-              'X-Idempotency-Key': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            },
-          }
-        );
-
-        console.log('✅ Pagamento criado com cartão salvo:', response.data.id);
-        return {
-          paymentId: response.data.id,
-          status: response.data.status,
-          status_detail: response.data.status_detail,
-        };
-      } catch (paymentError: any) {
-        console.error('❌ Erro ao criar pagamento com cartão salvo:', paymentError.response?.data || paymentError.message);
-        console.error('❌ Status:', paymentError.response?.status);
-        
-        // Verificar se é erro 500 do ambiente de teste
-        if (paymentError.response?.status === 500 && paymentError.response?.data?.error === 'internal_server_error') {
-          console.log('⚠️ Erro 500 detectado - provavelmente ambiente de teste do MercadoPago');
-          console.log('🔄 Tentando fallback para ambiente de teste...');
-          
-          // FALLBACK: Gerar token com cartão de teste completo para ambiente de teste
-          console.log('🔄 Gerando token com cartão de teste para fallback...');
-          
-          // Determinar cartão de teste baseado no payment_method_id
-          let testCardNumber = '4235647728025682'; // Visa padrão
-          if (paymentData.paymentMethodId === 'master') {
-            testCardNumber = '5031433215406351';
-          } else if (paymentData.paymentMethodId === 'amex') {
-            testCardNumber = '375365153556885';
-          } else if (paymentData.paymentMethodId === 'elo') {
-            testCardNumber = '50676783888311';
-          }
-          
-          console.log(`🔄 Gerando token para cartão de teste: ${testCardNumber.substring(0, 6)}****${testCardNumber.substring(12)}`);
-          
-          // Gerar token para cartão de teste
-          const testTokenResponse = await axios.post(
-            'https://api.mercadopago.com/v1/card_tokens',
-            {
-              card_number: testCardNumber,
-              security_code: '123',
-              expiration_month: '11',
-              expiration_year: '2030',
-              cardholder: {
-                name: 'APRO'
-              }
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-          
-          const testToken = testTokenResponse.data.id;
-          console.log('✅ Token de teste gerado:', testToken);
-          
-          // Pagamento com cartão de teste
-          const fallbackPayment = {
-            transaction_amount: paymentData.amount,
-            description: paymentData.description,
-            payment_method_id: paymentData.paymentMethodId || 'visa',
-            payer: {
-              email: paymentData.payerEmail
-            },
-            token: testToken,
-            installments: paymentData.installments || 1
-          };
-
-          console.log('📤 Payload fallback para teste:', JSON.stringify(fallbackPayment, null, 2));
-
-          const fallbackResponse = await axios.post(
-            'https://api.mercadopago.com/v1/payments',
-            fallbackPayment,
-            {
-              headers: {
-                'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json',
-                'X-Idempotency-Key': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              },
-            }
-          );
-
-          console.log('✅ Pagamento criado com fallback (ambiente de teste):', fallbackResponse.data.id);
-          return {
-            paymentId: fallbackResponse.data.id,
-            status: fallbackResponse.data.status,
-            status_detail: fallbackResponse.data.status_detail,
-          };
+      const response = await axios.post(
+        'https://api.mercadopago.com/v1/payments',
+        payment,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          },
         }
-        
-        console.error('❌ Headers:', paymentError.response?.headers);
-        throw new Error(`Erro ao processar pagamento: ${paymentError.response?.data?.message || paymentError.message}`);
-      }
+      );
+
+      console.log('✅ Pagamento criado com cartão salvo:', response.data.id);
+      return {
+        paymentId: response.data.id,
+        status: response.data.status,
+        status_detail: response.data.status_detail,
+      };
 
     } catch (error: any) {
-      console.error('❌ Erro geral ao criar pagamento com cartão salvo:', error.response?.data || error.message);
+      console.error('❌ Erro ao criar pagamento com cartão salvo:', error.response?.data || error.message);
       console.error('❌ Status:', error.response?.status);
-      console.error('❌ Headers:', error.response?.headers);
+      
+      // Tratamento específico para erros conhecidos
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_card_id')) {
+          throw new Error('Cartão não encontrado ou inválido');
+        } else if (errorData.message?.includes('invalid_security_code')) {
+          throw new Error('Código de segurança inválido');
+        } else if (errorData.message?.includes('customer_not_found')) {
+          throw new Error('Cliente não encontrado');
+        }
+      }
+      
       throw new Error(`Erro ao processar pagamento: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Método auxiliar: Criar customer e cartão em uma operação - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async createCustomerAndCard(email: string, cardToken: string, paymentMethodId?: string): Promise<{ customer: any; card: any }> {
+    try {
+      console.log('🔄 Criando customer e cartão em uma operação:', email);
+      
+      // Criar ou buscar customer
+      let customer;
+      try {
+        customer = await this.createCustomer(email);
+      } catch (error: any) {
+        if (error.message.includes('already exists')) {
+          customer = await this.searchCustomerByEmail(email);
+        } else {
+          throw error;
+        }
+      }
+      
+      // Adicionar cartão ao customer
+      const card = await this.addCardToCustomer(customer.id, cardToken, paymentMethodId);
+      
+      console.log('✅ Customer e cartão criados com sucesso:', { customerId: customer.id, cardId: card.id });
+      return { customer, card };
+    } catch (error: any) {
+      console.error('❌ Erro ao criar customer e cartão:', error.message);
+      throw error;
+    }
+  }
+
+  // Método auxiliar: Buscar ou criar customer por email
+  static async findOrCreateCustomer(email: string): Promise<any> {
+    try {
+      console.log('🔄 Buscando ou criando customer:', email);
+      
+      try {
+        // Tentar buscar customer existente
+        return await this.searchCustomerByEmail(email);
+      } catch (error: any) {
+        // Se não encontrou, criar novo
+        console.log('🔄 Customer não encontrado, criando novo...');
+        return await this.createCustomer(email);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao buscar ou criar customer:', error.message);
+      throw error;
     }
   }
 }
