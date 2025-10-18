@@ -95,6 +95,8 @@ const CheckoutScreen: React.FC = () => {
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const [taxaEntrega, setTaxaEntrega] = useState(0);
+  // Estado para armazenar o ID do pedido criado
+  const [pedidoId, setPedidoId] = useState<number | null>(null);
   
   // Estados para cartões salvos
   const [cartoesSalvos, setCartoesSalvos] = useState<Cartao[]>([]);
@@ -156,8 +158,8 @@ const CheckoutScreen: React.FC = () => {
       const resp = await consultarStatusPagamento(paymentId);
       setPaymentStatus(resp.status);
       if (resp.status === 'approved') {
-        // Cria o pedido só após pagamento aprovado
-        await criarPedidoAposPagamento();
+        // Finaliza o pedido após pagamento aprovado
+        await finalizarPedidoAposPagamento(paymentId);
       }
     } catch (e) {
       setPaymentStatus('rejected');
@@ -324,11 +326,12 @@ const CheckoutScreen: React.FC = () => {
           setLoading(false);
           return;
         }
-        // Inicia pagamento PIX
+        // Inicia pagamento PIX (sem criar pedido antes)
         const pixResp = await iniciarPagamentoPix({
-          amount: Number(calculateTotal()),
+          amount: calculateSubtotal() + taxaEntrega,
           description: `Pedido em ${estabelecimentoId}`,
           payerEmail: 'teste@teste.com', // Email válido para testes
+          // Não enviar pedidoId - será criado após pagamento aprovado
         });
         setPaymentResponse(pixResp);
         setPixPaymentId(pixResp.paymentId);
@@ -404,6 +407,10 @@ const CheckoutScreen: React.FC = () => {
           setLoading(false);
           return;
         }
+
+        // Criar pedido após pagamento aprovado (não antes)
+        // O pedido será criado no backend após pagamento aprovado
+
         let token: string;
         let paymentMethodId: string;
         let cleanCardNumber: string;
@@ -462,7 +469,7 @@ const CheckoutScreen: React.FC = () => {
         }
         // Chamar backend para criar pagamento
         const payload = {
-          amount: Number(calculateTotal()),
+          amount: calculateSubtotal() + taxaEntrega,
           description: `Pedido em ${estabelecimentoId}`,
           payerEmail: 'teste@teste.com', // Email válido para testes
           token,
@@ -473,6 +480,7 @@ const CheckoutScreen: React.FC = () => {
           usarCartaoSalvo: usarCartaoSalvo,
           cartaoId: cartaoSelecionado?.id,
           securityCode: usarCartaoSalvo ? savedCardCvv : cardCvv, // CVV para cartões salvos ou novos
+          // pedidoId será criado após pagamento aprovado
         };
         console.log('Chamando createCardPayment', payload);
         let cardResp;
@@ -500,7 +508,7 @@ const CheckoutScreen: React.FC = () => {
             console.log('Polling status pagamento:', statusResp);
             setPaymentStatus(statusResp.status);
             if (statusResp.status === 'approved') {
-              await criarPedidoAposPagamento();
+              await finalizarPedidoAposPagamento(cardPaymentId);
               setSuccess('Pagamento aprovado! Pedido confirmado.');
               break;
             }
@@ -510,7 +518,7 @@ const CheckoutScreen: React.FC = () => {
             setError('Pagamento não aprovado. Tente novamente.');
           }
         } else if (cardResp.status === 'approved') {
-          await criarPedidoAposPagamento();
+          await finalizarPedidoAposPagamento(cardPaymentId);
           setSuccess('Pagamento aprovado! Pedido confirmado.');
         } else {
           setError('Pagamento não aprovado.');
@@ -524,9 +532,9 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
-  // Cria o pedido após pagamento aprovado
-  const criarPedidoAposPagamento = async () => {
-    if (!userId || !estabelecimentoId) return;
+  // Cria o pedido antes do pagamento
+  const criarPedidoAntesPagamento = async () => {
+    if (!userId || !estabelecimentoId) return null;
     const payload = {
       clienteId: Number(userId),
       estabelecimentoId: Number(estabelecimentoId),
@@ -535,12 +543,45 @@ const CheckoutScreen: React.FC = () => {
         quantidade: item.quantidade
       })),
       formaPagamento: pagamento,
-      total: Number(calculateTotal()), // Corrigido: era valorTotal, agora é total
+      total: calculateSubtotal() + taxaEntrega,
     };
     console.log('Criando pedido com payload:', payload);
     try {
       const response = await createOrder(payload);
       console.log('Pedido criado com sucesso:', response);
+      return response.orderId; // Retorna o ID do pedido criado
+    } catch (error) {
+      console.error('Erro ao criar pedido:', error);
+      setError('Erro ao criar pedido.');
+      return null;
+    }
+  };
+
+  // Finaliza o pedido após pagamento aprovado
+  const finalizarPedidoAposPagamento = async (paymentId?: string) => {
+    if (!userId || !estabelecimentoId) return;
+    
+    try {
+      // Criar pedido após pagamento aprovado
+      const payload = {
+        clienteId: Number(userId),
+        estabelecimentoId: Number(estabelecimentoId),
+        produtos: cartItems.map((item) => ({
+          produtoId: Number(item.id),
+          quantidade: item.quantidade
+        })),
+        formaPagamento: pagamento,
+        total: calculateSubtotal() + taxaEntrega,
+        // Informações de pagamento aprovado
+        paymentId: paymentId || paymentResponse?.paymentId,
+        paymentStatus: 'approved',
+        paymentMethod: pagamento === 'pix' ? 'pix' : 'credit_card',
+      };
+      
+      console.log('Criando pedido após pagamento aprovado:', payload);
+      const response = await createOrder(payload);
+      console.log('Pedido criado com sucesso após pagamento:', response);
+      
       setSuccess('Pedido confirmado!');
       dispatch({ type: 'CLEAR_CART' });
       
@@ -549,8 +590,8 @@ const CheckoutScreen: React.FC = () => {
         navigation.navigate('Pedidos' as never);
       }, 2000);
     } catch (error) {
-      console.error('Erro ao criar pedido:', error);
-      setError('Erro ao criar pedido após pagamento aprovado.');
+      console.error('Erro ao criar pedido após pagamento:', error);
+      setError('Erro ao confirmar pedido. Contate o suporte.');
     }
   };
 

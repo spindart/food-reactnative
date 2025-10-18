@@ -1,10 +1,11 @@
 import api from './api';
 
-export async function iniciarPagamentoPix({ amount, description, payerEmail }) {
+export async function iniciarPagamentoPix({ amount, description, payerEmail, pedidoId }: { amount: number; description: string; payerEmail: string; pedidoId?: number }) {
   const response = await api.post('/pagamento/pix', {
     amount,
     description,
     payerEmail,
+    pedidoId,
   });
   return response.data;
 }

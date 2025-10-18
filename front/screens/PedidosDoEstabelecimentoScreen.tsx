@@ -100,13 +100,41 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
   };
 
   const handleCancelOrder = async (pedidoId: string) => {
+    console.log('🔄 PedidosDoEstabelecimentoScreen: Iniciando cancelamento do pedido:', pedidoId);
     setCancelLoading(pedidoId);
     try {
-      await cancelOrder(pedidoId);
-      setPedidos((prev) => prev.filter((p) => p.id !== pedidoId));
-      setSnackbar({ visible: true, message: 'Pedido cancelado!', type: 'success' });
-    } catch {
-      setSnackbar({ visible: true, message: 'Erro ao cancelar pedido.', type: 'error' });
+      console.log('🔄 PedidosDoEstabelecimentoScreen: Chamando cancelOrder...');
+      const result = await cancelOrder(pedidoId, 'Cancelado pelo estabelecimento');
+      console.log('✅ PedidosDoEstabelecimentoScreen: Resultado do cancelamento:', result);
+      
+      // Atualizar o pedido na lista em vez de removê-lo
+      setPedidos((prev) => 
+        prev.map((p) => 
+          p.id === pedidoId 
+            ? { ...p, status: 'cancelado' } 
+            : p
+        )
+      );
+      
+      setSnackbar({ 
+        visible: true, 
+        message: result.refund ? 
+          `Pedido cancelado! Reembolso de R$ ${result.refund.amount} processado.` : 
+          'Pedido cancelado!', 
+        type: 'success' 
+      });
+    } catch (error: any) {
+      console.error('❌ PedidosDoEstabelecimentoScreen: Erro detalhado ao cancelar pedido:', error);
+      console.error('❌ PedidosDoEstabelecimentoScreen: Status:', error.response?.status);
+      console.error('❌ PedidosDoEstabelecimentoScreen: Data:', error.response?.data);
+      console.error('❌ PedidosDoEstabelecimentoScreen: Message:', error.message);
+      console.error('❌ PedidosDoEstabelecimentoScreen: Stack:', error.stack);
+      
+      setSnackbar({ 
+        visible: true, 
+        message: `Erro ao cancelar pedido: ${error.response?.data?.message || error.message}`, 
+        type: 'error' 
+      });
     } finally {
       setCancelLoading(null);
     }
@@ -163,7 +191,10 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.button, { backgroundColor: '#D32F2F', marginTop: 8, opacity: cancelLoading === item.id ? 0.6 : 1 }]}
-              onPress={() => handleCancelOrder(item.id)}
+              onPress={() => {
+                console.log('🔄 Botão cancelar pressionado para pedido:', item.id);
+                handleCancelOrder(item.id);
+              }}
               disabled={cancelLoading === item.id || item.status === 'entregue' || item.status === 'cancelado'}
             >
               <Text style={styles.buttonText}>{cancelLoading === item.id ? 'Cancelando...' : 'Cancelar Pedido'}</Text>

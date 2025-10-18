@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { PedidoController } from '../controllers/pedido.controller';
+import { authenticateJWT } from '../services/auth.middleware';
 
 const router = Router();
 
@@ -26,6 +27,11 @@ router.get('/estabelecimento/:estabelecimentoId', async (req, res) => {
 // Atualiza status do pedido
 router.patch('/:id/status', async (req, res) => {
   await PedidoController.updateStatus(req, res);
+});
+
+// Cancelar pedido com reembolso automático
+router.post('/:id/cancel', authenticateJWT, async (req, res) => {
+  await PedidoController.cancelOrderWithRefund(req, res);
 });
 
 export default router;

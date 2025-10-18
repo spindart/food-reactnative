@@ -9,6 +9,7 @@ export interface CardPaymentPayload {
   paymentMethodId: string;
   issuerId?: number;
   cardNumber?: string; // Adicionado para detecção de bandeira
+  pedidoId?: number; // ID do pedido para associar pagamento
 }
 
 export interface CardPaymentResponse {

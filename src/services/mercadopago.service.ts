@@ -578,4 +578,270 @@ export class MercadoPagoService {
       throw error;
     }
   }
+
+  // Criar reembolso parcial/total - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async createRefund(paymentId: string, amount?: number): Promise<any> {
+    try {
+      console.log('🔄 Criando reembolso:', { paymentId, amount: amount ? `R$ ${amount}` : 'total' });
+
+      // Validar se o pagamento existe e está em estado válido para reembolso
+      try {
+        const payment = await this.getPaymentStatus(paymentId);
+        console.log('✅ Status do pagamento:', payment.status);
+        
+        // Verificar se o pagamento está aprovado (necessário para reembolso)
+        if (payment.status !== 'approved') {
+          throw new Error(`Pagamento não está aprovado. Status atual: ${payment.status}`);
+        }
+      } catch (error: any) {
+        if (error.message.includes('not found')) {
+          throw new Error('Pagamento não encontrado');
+        }
+        throw error;
+      }
+
+      // Preparar payload do reembolso
+      const refundData: any = {};
+      if (amount && amount > 0) {
+        refundData.amount = amount;
+        console.log('💰 Reembolso parcial:', amount);
+      } else {
+        console.log('💰 Reembolso total');
+      }
+
+      // Gerar chave de idempotência única
+      const idempotencyKey = `refund-${paymentId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log('📤 Enviando requisição de reembolso:', JSON.stringify(refundData, null, 2));
+
+      const response = await axios.post(
+        `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`,
+        refundData,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+            'X-Render-In-Process-Refunds': 'true', // Header específico para PIX conforme documentação oficial
+          },
+        }
+      );
+
+      console.log('✅ Reembolso criado com sucesso:', {
+        refundId: response.data.id,
+        paymentId: response.data.payment_id,
+        amount: response.data.amount,
+        status: response.data.status,
+        refundMode: response.data.refund_mode,
+        e2eId: response.data.e2e_id // ID específico para PIX
+      });
+
+      return {
+        refundId: response.data.id,
+        paymentId: response.data.payment_id,
+        amount: response.data.amount,
+        status: response.data.status,
+        dateCreated: response.data.date_created,
+        refundMode: response.data.refund_mode,
+        e2eId: response.data.e2e_id, // ID específico para PIX conforme documentação
+        amountRefundedToPayer: response.data.amount_refunded_to_payer,
+        labels: response.data.labels, // Labels como "hidden", "contingency"
+        reason: response.data.reason
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erro ao criar reembolso:', error.response?.data || error.message);
+      console.error('❌ Status:', error.response?.status);
+
+      // Tratamento específico para erros conhecidos conforme documentação
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        const errorCode = errorData.error_code;
+        
+        switch (errorCode) {
+          case 2063:
+            throw new Error('Ação solicitada não é válida para o estado atual do pagamento');
+          case 2085:
+            throw new Error('Valor inválido para operação do gateway');
+          case 4040:
+            throw new Error('Valor do reembolso deve ser positivo');
+          case 4041:
+            throw new Error('Valor do reembolso deve ser numérico');
+          case 3024:
+            throw new Error('Reembolso parcial não suportado para esta transação');
+          default:
+            // Para PIX, pode haver contingências que são reportadas como 400
+            // mas com header X-Render-In-Process-Refunds: true, retorna 201 com status in_process
+            throw new Error(`Erro de validação: ${errorData.message || 'Dados inválidos'}`);
+        }
+      } else if (error.response?.status === 404) {
+        const errorData = error.response.data;
+        const errorCode = errorData.error_code;
+        
+        switch (errorCode) {
+          case 2000:
+            throw new Error('Pagamento não encontrado');
+          case 2024:
+          case 15016:
+            throw new Error('Pagamento muito antigo para ser reembolsado');
+          case 2032:
+            throw new Error('Reembolso não encontrado');
+          default:
+            throw new Error(`Recurso não encontrado: ${errorData.message || 'Pagamento não existe'}`);
+        }
+      }
+
+      throw new Error(`Erro ao processar reembolso: ${error.response?.data?.message || error.message}`);
+    }
+  }
+
+  // Método auxiliar: Reembolso total (sem especificar valor)
+  static async createFullRefund(paymentId: string): Promise<any> {
+    return this.createRefund(paymentId);
+  }
+
+  // Método auxiliar: Reembolso parcial (especificando valor)
+  static async createPartialRefund(paymentId: string, amount: number): Promise<any> {
+    if (amount <= 0) {
+      throw new Error('Valor do reembolso deve ser maior que zero');
+    }
+    return this.createRefund(paymentId, amount);
+  }
+
+  // Verificar se um pagamento pode ser reembolsado
+  static async canRefundPayment(paymentId: string): Promise<{ canRefund: boolean; reason?: string }> {
+    try {
+      const payment = await this.getPaymentStatus(paymentId);
+      
+      if (payment.status !== 'approved') {
+        return { 
+          canRefund: false, 
+          reason: `Pagamento não está aprovado. Status atual: ${payment.status}` 
+        };
+      }
+
+      return { canRefund: true };
+    } catch (error: any) {
+      return { 
+        canRefund: false, 
+        reason: `Erro ao verificar pagamento: ${error.message}` 
+      };
+    }
+  }
+
+  // Método específico para reembolsos PIX - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async createPixRefund(paymentId: string, amount?: number): Promise<any> {
+    try {
+      console.log('🔄 Criando reembolso PIX:', { paymentId, amount: amount ? `R$ ${amount}` : 'total' });
+
+      // Validar se o pagamento existe e está em estado válido para reembolso
+      try {
+        const payment = await this.getPaymentStatus(paymentId);
+        console.log('✅ Status do pagamento PIX:', payment.status);
+        
+        // Verificar se o pagamento está aprovado (necessário para reembolso)
+        if (payment.status !== 'approved') {
+          throw new Error(`Pagamento PIX não está aprovado. Status atual: ${payment.status}`);
+        }
+      } catch (error: any) {
+        if (error.message.includes('not found')) {
+          throw new Error('Pagamento PIX não encontrado');
+        }
+        throw error;
+      }
+
+      // Preparar payload do reembolso PIX
+      const refundData: any = {};
+      if (amount && amount > 0) {
+        refundData.amount = amount;
+        console.log('💰 Reembolso PIX parcial:', amount);
+      } else {
+        console.log('💰 Reembolso PIX total');
+      }
+
+      // Gerar chave de idempotência única
+      const idempotencyKey = `pix-refund-${paymentId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      console.log('📤 Enviando requisição de reembolso PIX:', JSON.stringify(refundData, null, 2));
+
+      const response = await axios.post(
+        `https://api.mercadopago.com/v1/payments/${paymentId}/refunds`,
+        refundData,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+            'X-Render-In-Process-Refunds': 'true', // Header específico para PIX conforme documentação oficial
+          },
+        }
+      );
+
+      console.log('✅ Reembolso PIX criado com sucesso:', {
+        refundId: response.data.id,
+        paymentId: response.data.payment_id,
+        amount: response.data.amount,
+        status: response.data.status,
+        e2eId: response.data.e2e_id,
+        labels: response.data.labels
+      });
+
+      return {
+        refundId: response.data.id,
+        paymentId: response.data.payment_id,
+        amount: response.data.amount,
+        status: response.data.status,
+        dateCreated: response.data.date_created,
+        refundMode: response.data.refund_mode,
+        e2eId: response.data.e2e_id, // ID específico para PIX conforme documentação
+        amountRefundedToPayer: response.data.amount_refunded_to_payer,
+        labels: response.data.labels, // Labels como "hidden", "contingency"
+        reason: response.data.reason,
+        isPixRefund: true // Flag para identificar reembolso PIX
+      };
+
+    } catch (error: any) {
+      console.error('❌ Erro ao criar reembolso PIX:', error.response?.data || error.message);
+      console.error('❌ Status:', error.response?.status);
+
+      // Tratamento específico para erros PIX conforme documentação
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        const errorCode = errorData.error_code;
+        
+        switch (errorCode) {
+          case 2063:
+            throw new Error('Ação solicitada não é válida para o estado atual do pagamento PIX');
+          case 2085:
+            throw new Error('Valor inválido para operação do gateway PIX');
+          case 4040:
+            throw new Error('Valor do reembolso PIX deve ser positivo');
+          case 4041:
+            throw new Error('Valor do reembolso PIX deve ser numérico');
+          case 3024:
+            throw new Error('Reembolso parcial não suportado para esta transação PIX');
+          default:
+            // Para PIX, contingências são tratadas com header X-Render-In-Process-Refunds: true
+            throw new Error(`Erro de validação PIX: ${errorData.message || 'Dados inválidos'}`);
+        }
+      } else if (error.response?.status === 404) {
+        const errorData = error.response.data;
+        const errorCode = errorData.error_code;
+        
+        switch (errorCode) {
+          case 2000:
+            throw new Error('Pagamento PIX não encontrado');
+          case 2024:
+          case 15016:
+            throw new Error('Pagamento PIX muito antigo para ser reembolsado');
+          case 2032:
+            throw new Error('Reembolso PIX não encontrado');
+          default:
+            throw new Error(`Recurso PIX não encontrado: ${errorData.message || 'Pagamento PIX não existe'}`);
+        }
+      }
+
+      throw new Error(`Erro ao processar reembolso PIX: ${error.response?.data?.message || error.message}`);
+    }
+  }
 }

@@ -263,7 +263,7 @@ const PedidoListScreen: React.FC = () => {
                   {/* Status específico para pedidos em andamento */}
                   {selectedPedido.status === 'pendente' && (
                     <View style={styles.statusContainer}>
-                      <Text style={styles.statusText}>⏳ Aguardando aceitação do estabelecimento!</Text>
+                      <Text style={styles.statusText}>⏳ Aguardando confirmação do estabelecimento!</Text>
                     </View>
                   )}
                   

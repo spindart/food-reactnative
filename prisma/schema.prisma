@@ -78,6 +78,16 @@ model Pedido {
   itens             ItemPedido[]
   cliente           Usuario         @relation("ClientePedidos", fields: [clienteId], references: [id])
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  
+  // Campos de pagamento
+  paymentId         String?         @unique // ID do pagamento no MercadoPago
+  paymentStatus     String?         // Status do pagamento (approved, pending, etc)
+  paymentMethod     String?         // Método de pagamento (credit_card, pix, etc)
+  totalAmount       Float?          // Valor total do pedido
+  refundId          String?         @unique // ID do reembolso no MercadoPago
+  refundStatus      String?         // Status do reembolso (approved, pending, etc)
+  refundAmount      Float?          // Valor reembolsado
+  refundDate        DateTime?       // Data do reembolso
 }
 
 model ItemPedido {

@@ -5,9 +5,9 @@ const router = Router();
 
 // POST /pagamento/pix
 router.post('/pix', async function(req, res) {
-  const { amount, description, payerEmail } = req.body;
+  const { amount, description, payerEmail, pedidoId } = req.body;
   
-  console.log('Recebido /pagamento/pix:', { amount, description, payerEmail });
+  console.log('Recebido /pagamento/pix:', { amount, description, payerEmail, pedidoId });
   
   if (!amount || !description || !payerEmail) {
     return res.status(400).json({ error: 'amount, description e payerEmail são obrigatórios' });
@@ -15,11 +15,22 @@ router.post('/pix', async function(req, res) {
   
   try {
     const pix = await MercadoPagoService.createPixPayment({ amount, description, payerEmail });
+    
+    // Pedido será criado após pagamento aprovado no frontend
+    // Não salvar informações de pagamento aqui pois o pedido ainda não existe
+    
     return res.status(200).json(pix);
   } catch (error: any) {
-    console.error('Erro no endpoint PIX:', error);
+    console.error('❌ Erro no endpoint PIX:', error);
+    console.error('❌ Stack trace:', error.stack);
+    console.error('❌ Error details:', {
+      message: error.message,
+      status: error.status,
+      response: error.response?.data
+    });
+    
     return res.status(500).json({ 
-      error: error.message,
+      error: error.message || 'Erro interno do servidor',
       details: error.message.includes('forbidden') ? 'Email do pagador não autorizado. Verifique as credenciais do MercadoPago.' : error.message
     });
   }
@@ -29,7 +40,7 @@ router.post('/pix', async function(req, res) {
 // POST /pagamento/cartao
 router.post('/cartao', async function(req, res) {
   console.log('Recebido /pagamento/cartao:', req.body);
-    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode } = req.body;
+    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId } = req.body;
   
   if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
     return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
@@ -89,6 +100,9 @@ router.post('/cartao', async function(req, res) {
         issuerId 
       });
     }
+    
+    // Pedido será criado após pagamento aprovado no frontend
+    // Não salvar informações de pagamento aqui pois o pedido ainda não existe
     
     return res.status(200).json(payment);
   } catch (error: any) {
