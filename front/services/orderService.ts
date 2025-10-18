@@ -15,6 +15,12 @@ type CreateOrderPayload = {
   paymentId?: string;
   paymentStatus?: string;
   paymentMethod?: string;
+  // Informações de pagamento na entrega (opcionais)
+  formaPagamentoEntrega?: string;
+  precisaTroco?: boolean;
+  trocoParaQuanto?: number;
+  // Endereço de entrega (opcional)
+  enderecoEntrega?: string;
 };
 
 export const createOrder = async (payload: CreateOrderPayload) => {

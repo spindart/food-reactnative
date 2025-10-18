@@ -5,16 +5,24 @@ const router = Router();
 
 // POST /pagamento/pix
 router.post('/pix', async function(req, res) {
-  const { amount, description, payerEmail, pedidoId } = req.body;
+  const { amount, description, payerEmail, pedidoId, payerFirstName, payerLastName, payerCpf, payerAddress } = req.body;
   
-  console.log('Recebido /pagamento/pix:', { amount, description, payerEmail, pedidoId });
+  console.log('Recebido /pagamento/pix:', { amount, description, payerEmail, pedidoId, payerFirstName, payerLastName, payerCpf });
   
   if (!amount || !description || !payerEmail) {
     return res.status(400).json({ error: 'amount, description e payerEmail são obrigatórios' });
   }
   
   try {
-    const pix = await MercadoPagoService.createPixPayment({ amount, description, payerEmail });
+    const pix = await MercadoPagoService.createPixPayment({ 
+      amount, 
+      description, 
+      payerEmail,
+      payerFirstName,
+      payerLastName,
+      payerCpf,
+      payerAddress
+    });
     
     // Pedido será criado após pagamento aprovado no frontend
     // Não salvar informações de pagamento aqui pois o pedido ainda não existe

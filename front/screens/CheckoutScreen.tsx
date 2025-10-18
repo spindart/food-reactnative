@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Pressable, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, Modal, Pressable, Image, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { createOrder } from '../services/orderService';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
@@ -9,6 +9,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { iniciarPagamentoPix, consultarStatusPagamento } from '../services/pixService';
 import { createCardPayment, getCardPaymentStatus, generateCardToken, generateSavedCardToken, CardPaymentResponse } from '../services/cardPaymentService';
 import { getCartoes, getCartaoPadrao, Cartao, adicionarCartao } from '../services/cartaoService';
+import { getEnderecos, addEndereco } from '../services/enderecoService';
 
 import * as Clipboard from 'expo-clipboard';
 import { Animated } from 'react-native';
@@ -43,7 +44,7 @@ const CheckoutScreen: React.FC = () => {
       } catch (e) {}
     })();
   }, []);
-  const [pagamento, setPagamento] = useState<'dinheiro' | 'cartao' | 'pix'>('dinheiro');
+  const [pagamento, setPagamento] = useState<'dinheiro' | 'cartao' | 'pix' | null>(null);
   const [showCardModal, setShowCardModal] = useState(false);
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
@@ -91,8 +92,33 @@ const CheckoutScreen: React.FC = () => {
   const [paymentStatus, setPaymentStatus] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
   const [pixTimer, setPixTimer] = useState(300); // 5 minutos
+  const [pixTimerActive, setPixTimerActive] = useState<boolean>(false);
+  const [pixTimerInterval, setPixTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const [copied, setCopied] = useState(false);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
+  
+  // Estados para controlar fluxo de pagamento
+  const [paymentMethodSelected, setPaymentMethodSelected] = useState<boolean>(false);
+  const [orderConfirmed, setOrderConfirmed] = useState<boolean>(false);
+  const [paymentProcessing, setPaymentProcessing] = useState<boolean>(false);
+  
+  // Estados para pagamento na entrega
+  const [showDeliveryPaymentModal, setShowDeliveryPaymentModal] = useState<boolean>(false);
+  const [formaPagamentoEntrega, setFormaPagamentoEntrega] = useState<string>('');
+  const [precisaTroco, setPrecisaTroco] = useState<boolean>(false);
+  const [trocoParaQuanto, setTrocoParaQuanto] = useState<string>('');
+  
+  // Estados para modal de endereço
+  const [showAddressModal, setShowAddressModal] = useState<boolean>(false);
+  const [newAddressLabel, setNewAddressLabel] = useState<string>('');
+  const [newAddressStreet, setNewAddressStreet] = useState<string>('');
+  const [newAddressNumber, setNewAddressNumber] = useState<string>('');
+  const [newAddressComplement, setNewAddressComplement] = useState<string>('');
+  const [newAddressNeighborhood, setNewAddressNeighborhood] = useState<string>('');
+  const [newAddressCity, setNewAddressCity] = useState<string>('');
+  const [newAddressState, setNewAddressState] = useState<string>('');
+  const [newAddressZipCode, setNewAddressZipCode] = useState<string>('');
+  const [addressModalError, setAddressModalError] = useState<string | null>(null);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const [taxaEntrega, setTaxaEntrega] = useState(0);
   // Estado para armazenar o ID do pedido criado
@@ -136,9 +162,19 @@ const CheckoutScreen: React.FC = () => {
       setEstabelecimentoId(String(estId));
       getEstabelecimentoById(String(estId)).then((est) => {
         if (est && est.taxaEntrega !== undefined && est.taxaEntrega !== null) {
-          setTaxaEntrega(Number(est.taxaEntrega));
+          // Só define taxa de entrega se houver itens no carrinho
+          if (cartState.items.length > 0) {
+            setTaxaEntrega(Number(est.taxaEntrega));
+          } else {
+            setTaxaEntrega(0);
+          }
         }
       });
+    }
+    
+    // Zerar taxa de entrega se carrinho estiver vazio
+    if (cartState.items.length === 0) {
+      setTaxaEntrega(0);
     }
   }, [route.params, cartState.items]);
 
@@ -158,6 +194,8 @@ const CheckoutScreen: React.FC = () => {
       const resp = await consultarStatusPagamento(paymentId);
       setPaymentStatus(resp.status);
       if (resp.status === 'approved') {
+        // Parar timer PIX quando pagamento for aprovado
+        stopPixTimer();
         // Finaliza o pedido após pagamento aprovado
         await finalizarPedidoAposPagamento(paymentId);
       }
@@ -192,6 +230,15 @@ const CheckoutScreen: React.FC = () => {
     }
   }, [paymentResponse]);
 
+  // Cleanup do timer PIX quando componente for desmontado
+  React.useEffect(() => {
+    return () => {
+      if (pixTimerInterval) {
+        clearInterval(pixTimerInterval);
+      }
+    };
+  }, [pixTimerInterval]);
+
   // Efeito para animação de cópia
   React.useEffect(() => {
     if (copied) {
@@ -217,6 +264,46 @@ const CheckoutScreen: React.FC = () => {
       Clipboard.setStringAsync(paymentResponse.qr_code);
       setCopied(true);
     }
+  };
+
+  // Funções para controlar timer PIX
+  const startPixTimer = () => {
+    setPixTimer(300); // 5 minutos = 300 segundos
+    setPixTimerActive(true);
+    
+    const interval = setInterval(() => {
+      setPixTimer((prev) => {
+        if (prev <= 1) {
+          // Timer expirado
+          setPixTimerActive(false);
+          clearInterval(interval);
+          setPixTimerInterval(null);
+          setError('Tempo para pagamento PIX expirado. Inicie um novo pagamento.');
+          setPaymentResponse(null);
+          setPixPaymentId(null);
+          setPaymentStatus(null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    setPixTimerInterval(interval);
+  };
+
+  const stopPixTimer = () => {
+    if (pixTimerInterval) {
+      clearInterval(pixTimerInterval);
+      setPixTimerInterval(null);
+    }
+    setPixTimerActive(false);
+    setPixTimer(300);
+  };
+
+  const formatTime = (seconds: number): string => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   // Função para salvar cartão
@@ -289,6 +376,7 @@ const CheckoutScreen: React.FC = () => {
       // Definir o novo cartão como selecionado e padrão
       setCartaoSelecionado(response.cartao);
       setUsarCartaoSalvo(true);
+      setPaymentMethodSelected(true);
       console.log('✅ Novo cartão definido como padrão:', response.cartao);
       
       // Fechar modal e limpar campos
@@ -298,7 +386,7 @@ const CheckoutScreen: React.FC = () => {
       setCardExp('');
       setCardCvv('');
       
-      setSuccess('Cartão salvo com sucesso!');
+      setSuccess('Cartão salvo e selecionado com sucesso!');
       
       // Limpar mensagem de sucesso após 3 segundos
       setTimeout(() => setSuccess(null), 3000);
@@ -314,8 +402,210 @@ const CheckoutScreen: React.FC = () => {
     }
   };
 
+  // Função para selecionar método de pagamento
+  const handlePaymentMethodSelect = (method: 'dinheiro' | 'cartao' | 'pix') => {
+    if (orderConfirmed || paymentProcessing) return; // Não permite trocar após confirmar
+    
+    setPagamento(method);
+    setError(null);
+    setSuccess(null);
+    setPaymentMethodSelected(false); // Resetar seleção anterior
+    
+    // Se for dinheiro, mostrar modal de pagamento na entrega
+    if (method === 'dinheiro') {
+      setShowDeliveryPaymentModal(true);
+    }
+    // Se for cartão, mostrar modal de seleção
+    else if (method === 'cartao') {
+      if (cartoesSalvos.length > 0) {
+        setShowCardSelectionModal(true);
+      } else {
+        setShowCardModal(true);
+      }
+    }
+    // Se for PIX, marcar como selecionado
+    else if (method === 'pix') {
+      setPaymentMethodSelected(true);
+    }
+  };
+
+  // Função para confirmar pagamento na entrega
+  const handleConfirmDeliveryPayment = () => {
+    if (!formaPagamentoEntrega) {
+      setError('Selecione uma forma de pagamento');
+      return;
+    }
+
+    // Validação do troco se for dinheiro
+    if (formaPagamentoEntrega === 'dinheiro' && precisaTroco) {
+      const trocoValue = parseFloat(trocoParaQuanto);
+      const totalPedido = calculateSubtotal() + taxaEntrega;
+      
+      if (isNaN(trocoValue) || trocoValue <= 0) {
+        setError('Digite um valor válido para o troco');
+        return;
+      }
+      
+      if (trocoValue < totalPedido) {
+        setError(`O valor do troco deve ser maior ou igual ao total do pedido (R$ ${totalPedido.toFixed(2)})`);
+        return;
+      }
+    }
+
+    // Marcar como selecionado e fechar modal
+    setPaymentMethodSelected(true);
+    setShowDeliveryPaymentModal(false);
+    setSuccess(`Pagamento na entrega: ${formaPagamentoEntrega === 'dinheiro' ? 'Dinheiro' : formaPagamentoEntrega === 'debito' ? 'Cartão de Débito' : 'Cartão de Crédito'}${precisaTroco ? ` (Troco para R$ ${trocoParaQuanto})` : ''}`);
+  };
+
+  // Função para cancelar seleção de pagamento na entrega
+  const handleCancelDeliveryPayment = () => {
+    setPagamento(null); // Volta para nenhum método selecionado
+    setFormaPagamentoEntrega('');
+    setPrecisaTroco(false);
+    setTrocoParaQuanto('');
+    setShowDeliveryPaymentModal(false);
+    setPaymentMethodSelected(false);
+  };
+
+  // Função para adicionar endereço
+  const handleAddAddress = async () => {
+    setAddressModalError(null);
+    
+    if (!newAddressLabel.trim() || !newAddressStreet.trim() || !newAddressNumber.trim() || !newAddressNeighborhood.trim() || !newAddressCity.trim() || !newAddressState.trim() || !newAddressZipCode.trim()) {
+      setAddressModalError('Preencha todos os campos obrigatórios!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Construir endereço completo
+      const enderecoCompleto = `${newAddressStreet}, ${newAddressNumber}${newAddressComplement ? ', ' + newAddressComplement : ''}, ${newAddressNeighborhood}, ${newAddressCity} - ${newAddressState}, ${newAddressZipCode}`;
+      
+      const novoEndereco = await addEndereco({
+        label: newAddressLabel,
+        address: enderecoCompleto,
+        latitude: 0, // Placeholder - pode ser integrado com geocoding
+        longitude: 0, // Placeholder
+      });
+
+      // Recarregar endereços
+      const lista = await getEnderecos();
+      setEnderecos(lista);
+      
+      // Selecionar o novo endereço
+      setEnderecoId(novoEndereco.id);
+      setEndereco(novoEndereco.address);
+      
+      // Fechar modal e limpar campos
+      setShowAddressModal(false);
+      setNewAddressLabel('');
+      setNewAddressStreet('');
+      setNewAddressNumber('');
+      setNewAddressComplement('');
+      setNewAddressNeighborhood('');
+      setNewAddressCity('');
+      setNewAddressState('');
+      setNewAddressZipCode('');
+      
+      setSuccess('Endereço salvo e selecionado com sucesso!');
+      
+    } catch (e: any) {
+      console.log('Erro ao adicionar endereço:', e);
+      setAddressModalError(`Erro ao salvar endereço: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleConfirmOrder = async () => {
-  console.log('handleConfirmOrder chamado', { pagamento, cardNumber, cardName, cardExp, cardCvv });
+    console.log('handleConfirmOrder chamado', { pagamento, cardNumber, cardName, cardExp, cardCvv });
+    
+    // Validações antes de confirmar
+    if (!pagamento) {
+      setError('Selecione uma forma de pagamento');
+      return;
+    }
+    
+    if (!paymentMethodSelected) {
+      if (pagamento === 'dinheiro') {
+        setError('Configure o pagamento na entrega antes de confirmar');
+      } else {
+        setError('Confirme a forma de pagamento');
+      }
+      return;
+    }
+    
+    if (cartItems.length === 0) {
+      setError('Adicione itens ao carrinho');
+      return;
+    }
+    
+    if (!endereco.trim()) {
+      setError('Digite o endereço de entrega');
+      return;
+    }
+    
+    // Marcar como confirmado e processando
+    setOrderConfirmed(true);
+    setPaymentProcessing(true);
+    
+    // Se for pagamento na entrega (dinheiro), criar pedido diretamente
+    if (pagamento === 'dinheiro') {
+      try {
+        setLoading(true);
+        setError(null);
+        setSuccess(null);
+        
+        const payload = {
+          clienteId: Number(userId),
+          estabelecimentoId: Number(estabelecimentoId),
+          produtos: cartItems.map((item) => ({
+            produtoId: Number(item.id),
+            quantidade: item.quantidade
+          })),
+          formaPagamento: 'dinheiro',
+          total: calculateSubtotal() + taxaEntrega,
+          // Informações de pagamento na entrega
+          formaPagamentoEntrega: formaPagamentoEntrega,
+          precisaTroco: precisaTroco,
+          trocoParaQuanto: precisaTroco ? parseFloat(trocoParaQuanto) : undefined,
+          // Endereço de entrega
+          enderecoEntrega: endereco,
+        };
+        
+        console.log('🔍 DEBUG - Frontend enviando dados:');
+        console.log('  formaPagamentoEntrega:', formaPagamentoEntrega);
+        console.log('  precisaTroco:', precisaTroco);
+        console.log('  trocoParaQuanto:', trocoParaQuanto);
+        console.log('  payload completo:', payload);
+        
+        console.log('Criando pedido com pagamento na entrega:', payload);
+        const response = await createOrder(payload);
+        console.log('Pedido criado com sucesso:', response);
+        
+        setSuccess('Pedido confirmado! Você pagará na entrega.');
+        setPaymentProcessing(false);
+        
+        // Limpar carrinho automaticamente
+        dispatch({ type: 'CLEAR_CART' });
+        
+        // Navegar para a tela de pedidos após 2 segundos
+        setTimeout(() => {
+          navigation.navigate('Pedidos' as never);
+        }, 2000);
+        
+      } catch (error) {
+        console.error('Erro ao criar pedido:', error);
+        setError('Erro ao confirmar pedido. Contate o suporte.');
+        setPaymentProcessing(false);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+    
     if (pagamento === 'pix') {
       setLoading(true);
       setError(null);
@@ -331,12 +621,26 @@ const CheckoutScreen: React.FC = () => {
           amount: calculateSubtotal() + taxaEntrega,
           description: `Pedido em ${estabelecimentoId}`,
           payerEmail: 'teste@teste.com', // Email válido para testes
+          payerFirstName: 'Teste',
+          payerLastName: 'Usuario',
+          payerCpf: '19119119100', // CPF válido para testes conforme documentação
+          payerAddress: {
+            zip_code: '06233200',
+            street_name: 'Av. das Nações Unidas',
+            street_number: '3003',
+            neighborhood: 'Bonfim',
+            city: 'Osasco',
+            federal_unit: 'SP'
+          },
           // Não enviar pedidoId - será criado após pagamento aprovado
         });
         setPaymentResponse(pixResp);
         setPixPaymentId(pixResp.paymentId);
         setPaymentStatus('pending');
         setSuccess('Pagamento PIX iniciado! Veja o QR Code abaixo.');
+        
+        // Iniciar timer de 5 minutos para pagamento PIX
+        startPixTimer();
       } catch (error) {
         setError('Erro ao iniciar pagamento PIX.');
       } finally {
@@ -542,7 +846,7 @@ const CheckoutScreen: React.FC = () => {
         produtoId: Number(item.id),
         quantidade: item.quantidade
       })),
-      formaPagamento: pagamento,
+      formaPagamento: pagamento || 'pix', // Fallback para 'pix' se for null
       total: calculateSubtotal() + taxaEntrega,
     };
     console.log('Criando pedido com payload:', payload);
@@ -570,104 +874,179 @@ const CheckoutScreen: React.FC = () => {
           produtoId: Number(item.id),
           quantidade: item.quantidade
         })),
-        formaPagamento: pagamento,
+        formaPagamento: pagamento || 'pix', // Fallback para 'pix' se for null
         total: calculateSubtotal() + taxaEntrega,
         // Informações de pagamento aprovado
         paymentId: paymentId || paymentResponse?.paymentId,
         paymentStatus: 'approved',
         paymentMethod: pagamento === 'pix' ? 'pix' : 'credit_card',
+        // Informações de pagamento na entrega (se aplicável)
+        formaPagamentoEntrega: pagamento === 'dinheiro' ? formaPagamentoEntrega : undefined,
+        precisaTroco: pagamento === 'dinheiro' ? precisaTroco : undefined,
+        trocoParaQuanto: pagamento === 'dinheiro' && precisaTroco ? parseFloat(trocoParaQuanto) : undefined,
+        // Endereço de entrega (sempre enviado)
+        enderecoEntrega: endereco,
       };
       
-      console.log('Criando pedido após pagamento aprovado:', payload);
+      console.log('🔍 DEBUG - Criando pedido após pagamento aprovado:');
+      console.log('  enderecoEntrega:', endereco);
+      console.log('  payload completo:', payload);
       const response = await createOrder(payload);
       console.log('Pedido criado com sucesso após pagamento:', response);
       
-      setSuccess('Pedido confirmado!');
+      setSuccess('Pedido confirmado com sucesso!');
+      setPaymentProcessing(false);
+      
+      // Zerar taxa de entrega após pagamento confirmado
+      setTaxaEntrega(0);
+      
+      // Limpar carrinho automaticamente após pagamento aprovado
       dispatch({ type: 'CLEAR_CART' });
       
       // Navegar para a tela de pedidos após 2 segundos
       setTimeout(() => {
         navigation.navigate('Pedidos' as never);
       }, 2000);
+      
     } catch (error) {
       console.error('Erro ao criar pedido após pagamento:', error);
       setError('Erro ao confirmar pedido. Contate o suporte.');
+      setPaymentProcessing(false);
     }
   };
 
+
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Endereço de entrega</Text>
-      {enderecos.length > 0 ? (
-        <View>
-          <Text style={{ marginBottom: 6 }}>Selecione um endereço salvo:</Text>
-          <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, marginBottom: 12, backgroundColor: '#fff' }}>
-            <Picker
-              selectedValue={enderecoId}
-              onValueChange={(itemValue, itemIndex) => {
-                setEnderecoId(itemValue);
-                const e = enderecos.find((x) => x.id === itemValue);
-                setEndereco(e ? e.address : '');
-              }}
-              style={{ height: 48 }}
-            >
-              {enderecos.map((e: any) => (
-                <Picker.Item key={e.id} label={`${e.label}${e.isDefault ? ' (Padrão)' : ''} - ${e.address}`} value={e.id} />
-              ))}
-            </Picker>
-          </View>
-        </View>
-      ) : (
-        <TextInput
-          style={styles.input}
-          value={endereco}
-          onChangeText={setEndereco}
-          placeholder="Digite o endereço"
-        />
-      )}
-      <Text style={styles.sectionTitle}>Forma de pagamento</Text>
-      <View style={{ flexDirection: 'row', marginBottom: 16 }}>
-        <TouchableOpacity style={[styles.payButton, pagamento === 'dinheiro' && styles.payButtonSelected]} onPress={() => setPagamento('dinheiro')}>
-          <Text style={[styles.payButtonText, pagamento === 'dinheiro' && styles.payButtonTextSelected]}>Pagar na entrega</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.payButton, pagamento === 'cartao' && styles.payButtonSelected]} onPress={() => { 
-          setPagamento('cartao'); 
-          if (cartoesSalvos.length > 0) {
-            setShowCardSelectionModal(true);
-          } else {
-            setShowCardModal(true);
-          }
-        }}>
-          <Text style={[styles.payButtonText, pagamento === 'cartao' && styles.payButtonTextSelected]}>Cartão</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.payButton, pagamento === 'pix' && styles.payButtonSelected]} onPress={() => setPagamento('pix')}>
-          <Text style={[styles.payButtonText, pagamento === 'pix' && styles.payButtonTextSelected]}>PIX</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.sectionTitle}>Resumo do pedido</Text>
-      <FlatList
-        data={cartItems}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <Text style={styles.name}>{item.nome}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: -1 } })} style={{ marginHorizontal: 4 }}>
-                <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>-</Text>
-              </TouchableOpacity>
-              <Text style={styles.details}>Qtd: {item.quantidade}</Text>
-              <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: 1 } })} style={{ marginHorizontal: 4 }}>
-                <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>+</Text>
-              </TouchableOpacity>
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.sectionTitle}>Endereço de entrega</Text>
+        {enderecos.length > 0 ? (
+          <View>
+            <Text style={{ marginBottom: 6, fontSize: 14, color: '#666' }}>Selecione um endereço salvo:</Text>
+            <View style={{ borderWidth: 1, borderColor: '#e9ecef', borderRadius: 12, marginBottom: 12, backgroundColor: '#fff' }}>
+              <Picker
+                selectedValue={enderecoId}
+                onValueChange={(itemValue, itemIndex) => {
+                  setEnderecoId(itemValue);
+                  const e = enderecos.find((x) => x.id === itemValue);
+                  setEndereco(e ? e.address : '');
+                }}
+                style={{ height: 48 }}
+              >
+                {enderecos.map((e: any) => (
+                  <Picker.Item key={e.id} label={`${e.label}${e.isDefault ? ' (Padrão)' : ''} - ${e.address}`} value={e.id} />
+                ))}
+              </Picker>
             </View>
-            <Text style={styles.details}>R$ {(item.preco * item.quantidade).toFixed(2)}</Text>
-            <TouchableOpacity onPress={() => dispatch({ type: 'REMOVE_ITEM', payload: item.id })} style={{ marginLeft: 12 }}>
-              <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Remover</Text>
+            <TouchableOpacity 
+              style={styles.manageAddressButton}
+              onPress={() => navigation.navigate('Enderecos' as never)}
+            >
+              <Text style={styles.manageAddressButtonText}>Gerenciar Endereços</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.noAddressCard}>
+            <Text style={styles.noAddressIcon}>📍</Text>
+            <Text style={styles.noAddressTitle}>Nenhum endereço salvo</Text>
+            <Text style={styles.noAddressSubtext}>Adicione um endereço para facilitar seus pedidos</Text>
+            <TouchableOpacity 
+              style={styles.addAddressButton}
+              onPress={() => setShowAddressModal(true)}
+            >
+              <Text style={styles.addAddressButtonText}>Adicionar Endereço</Text>
             </TouchableOpacity>
           </View>
         )}
-        contentContainerStyle={styles.list}
-      />
+      <Text style={styles.sectionTitle}>Forma de pagamento</Text>
+      <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+        <TouchableOpacity 
+          style={[
+            styles.payButton, 
+            pagamento === 'dinheiro' && pagamento !== null && styles.payButtonSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled,
+            pagamento === 'dinheiro' && !paymentMethodSelected && styles.payButtonWarning
+          ]} 
+          onPress={() => handlePaymentMethodSelect('dinheiro')}
+          disabled={orderConfirmed || paymentProcessing}
+        >
+          <Text style={[
+            styles.payButtonText, 
+            pagamento === 'dinheiro' && pagamento !== null && styles.payButtonTextSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled,
+            pagamento === 'dinheiro' && !paymentMethodSelected && styles.payButtonTextWarning
+          ]}>
+            Pagar na entrega
+            {pagamento === 'dinheiro' && !paymentMethodSelected && ' ⚠️'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[
+            styles.payButton, 
+            pagamento === 'cartao' && pagamento !== null && styles.payButtonSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled
+          ]} 
+          onPress={() => handlePaymentMethodSelect('cartao')}
+          disabled={orderConfirmed || paymentProcessing}
+        >
+          <Text style={[
+            styles.payButtonText, 
+            pagamento === 'cartao' && pagamento !== null && styles.payButtonTextSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled
+          ]}>Cartão</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={[
+            styles.payButton, 
+            pagamento === 'pix' && pagamento !== null && styles.payButtonSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled
+          ]} 
+          onPress={() => handlePaymentMethodSelect('pix')}
+          disabled={orderConfirmed || paymentProcessing}
+        >
+          <Text style={[
+            styles.payButtonText, 
+            pagamento === 'pix' && pagamento !== null && styles.payButtonTextSelected,
+            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled
+          ]}>PIX</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.sectionTitle}>Resumo do pedido</Text>
+      {cartItems.length > 0 ? (
+        <FlatList
+          data={cartItems}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.item}>
+              <Text style={styles.name}>{item.nome}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: -1 } })} style={{ marginHorizontal: 4 }}>
+                  <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.details}>Qtd: {item.quantidade}</Text>
+                <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: 1 } })} style={{ marginHorizontal: 4 }}>
+                  <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>+</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.details}>R$ {(item.preco * item.quantidade).toFixed(2)}</Text>
+              <TouchableOpacity onPress={() => dispatch({ type: 'REMOVE_ITEM', payload: item.id })} style={{ marginLeft: 12 }}>
+                <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Remover</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          contentContainerStyle={styles.list}
+        />
+      ) : (
+        <View style={styles.emptyOrderSummary}>
+          <Text style={styles.emptyOrderIcon}>📋</Text>
+          <Text style={styles.emptyOrderText}>Nenhum item no pedido</Text>
+        </View>
+      )}
       <View style={styles.resumoRow}>
         <Text style={styles.resumoLabel}>Subtotal</Text>
         <Text style={styles.resumoValue}>R$ {calculateSubtotal().toFixed(2)}</Text>
@@ -680,58 +1059,160 @@ const CheckoutScreen: React.FC = () => {
         <Text style={styles.resumoLabelTotal}>Total</Text>
         <Text style={styles.resumoValueTotal}>R$ {calculateTotal()}</Text>
       </View>
-      {error && <Text style={{ color: 'red', textAlign: 'center' }}>{error}</Text>}
-      {success && <Text style={{ color: 'green', textAlign: 'center' }}>{success}</Text>}
+      {/* Feedback Messages */}
+      {error && (
+        <View style={styles.feedbackContainer}>
+          <View style={styles.feedbackError}>
+            <Text style={styles.feedbackIcon}>⚠️</Text>
+            <Text style={styles.feedbackErrorText}>{error}</Text>
+          </View>
+        </View>
+      )}
+      {success && (
+        <View style={styles.feedbackContainer}>
+          <View style={styles.feedbackSuccess}>
+            <Text style={styles.feedbackIcon}>✅</Text>
+            <Text style={styles.feedbackSuccessText}>{success}</Text>
+          </View>
+        </View>
+      )}
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: cartItems.length === 0 ? '#ccc' : '#e5293e' }]}
+        style={[
+          styles.button, 
+          { 
+            backgroundColor: cartItems.length === 0 || !pagamento || !paymentMethodSelected ? '#ccc' : '#e5293e',
+            opacity: (orderConfirmed || paymentProcessing) ? 0.7 : 1
+          }
+        ]}
         onPress={handleConfirmOrder}
-        disabled={loading || cartItems.length === 0}
+        disabled={loading || cartItems.length === 0 || !pagamento || !paymentMethodSelected || orderConfirmed || paymentProcessing}
       >
-        <Text style={styles.buttonText}>{loading ? 'Enviando...' : 'Confirmar Pedido'}</Text>
+        <Text style={styles.buttonText}>
+          {loading ? 'Processando...' : 
+           orderConfirmed ? 'Pedido Confirmado' : 
+           paymentProcessing ? 'Processando Pagamento...' : 
+           cartItems.length === 0 ? 'Adicione itens ao carrinho' :
+           !pagamento ? 'Selecione uma forma de pagamento' :
+           !paymentMethodSelected ? 'Configure o pagamento' :
+           'Confirmar Pedido'}
+        </Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: '#888', marginTop: 8 }]}
-        onPress={() => dispatch({ type: 'CLEAR_CART' })}
-        disabled={cartItems.length === 0}
-      >
-        <Text style={styles.buttonText}>Limpar Carrinho</Text>
-      </TouchableOpacity>
+      {/* Botão Limpar Carrinho - só aparece antes de confirmar */}
+      {!orderConfirmed && !paymentProcessing && (
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: '#888', marginTop: 8 }]}
+          onPress={() => dispatch({ type: 'CLEAR_CART' })}
+          disabled={cartItems.length === 0}
+        >
+          <Text style={styles.buttonText}>Limpar Carrinho</Text>
+        </TouchableOpacity>
+      )}
+      
       {cartItems.length === 0 && (
-        <Text style={{ color: '#e5293e', textAlign: 'center', marginTop: 12, fontWeight: 'bold' }}>Seu carrinho está vazio.</Text>
+        <View style={styles.emptyCartContainer}>
+          <View style={styles.emptyCartCard}>
+            <Text style={styles.emptyCartIcon}>🛒</Text>
+            <Text style={styles.emptyCartTitle}>Carrinho Vazio</Text>
+            <Text style={styles.emptyCartSubtext}>
+              Adicione produtos ao seu carrinho para continuar com o pedido
+            </Text>
+            <TouchableOpacity 
+              style={styles.emptyCartButton}
+              onPress={() => navigation.navigate('Home' as never)}
+            >
+              <Text style={styles.emptyCartButtonText}>Ver Produtos</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       )}
       {paymentResponse && paymentResponse.qr_code_base64 && (
-        <View style={{ alignItems: 'center', marginVertical: 16, backgroundColor: '#fff', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 }}>
-          <Text style={{ fontWeight: 'bold', color: '#e5293e', marginBottom: 8, fontSize: 16 }}>Escaneie o QR Code PIX para pagar</Text>
-          <Image
-            source={{ uri: `data:image/png;base64,${paymentResponse.qr_code_base64}` }}
-            style={{ width: 200, height: 200, borderRadius: 12, borderWidth: 2, borderColor: '#e5293e', marginBottom: 12 }}
-            resizeMode="contain"
-          />
-          <TouchableOpacity onPress={handleCopyPixCode} style={{ backgroundColor: '#e5293e', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 18, marginTop: 8, flexDirection: 'row', alignItems: 'center', shadowColor: '#e5293e', shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}>
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Copiar código PIX</Text>
-          </TouchableOpacity>
-          <Animated.View style={{ opacity: fadeAnim, marginTop: 6 }}>
-            {copied && <Text style={{ color: 'green', fontWeight: 'bold' }}>Código copiado!</Text>}
-          </Animated.View>
-          <Text style={{ color: '#e5293e', marginTop: 10, fontWeight: 'bold', fontSize: 15 }}>
-            {pixTimer > 0 ? `Expira em ${Math.floor(pixTimer/60)}:${(pixTimer%60).toString().padStart(2,'0')}` : 'QR Code expirado'}
+        <View style={styles.pixPaymentContainer}>
+          {/* Header com título e timer */}
+          <View style={styles.pixHeader}>
+            <Text style={styles.pixTitle}>Pagamento via PIX</Text>
+            {pixTimerActive && pixTimer > 0 && (
+              <View style={styles.timerContainer}>
+                <View style={styles.timerCircle}>
+                  <Text style={styles.timerText}>{formatTime(pixTimer)}</Text>
+                </View>
+                <Text style={styles.timerLabel}>Tempo restante</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Instruções */}
+          <Text style={styles.pixInstructions}>
+            Escaneie o QR Code abaixo com seu app bancário ou Mercado Pago
           </Text>
+
+          {/* QR Code Container */}
+          <View style={styles.qrCodeContainer}>
+            <Image
+              source={{ uri: `data:image/png;base64,${paymentResponse.qr_code_base64}` }}
+              style={styles.qrCode}
+              resizeMode="contain"
+            />
+            
+            {/* Overlay quando timer expira */}
+            {pixTimer === 0 && (
+              <View style={styles.qrCodeOverlay}>
+                <Text style={styles.expiredText}>QR Code Expirado</Text>
+                <Text style={styles.expiredSubtext}>Inicie um novo pagamento</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Botão Copiar Código */}
+          <TouchableOpacity 
+            onPress={handleCopyPixCode} 
+            style={[styles.copyButton, pixTimer === 0 && styles.copyButtonDisabled]}
+            disabled={pixTimer === 0}
+          >
+            <Text style={styles.copyButtonText}>Copiar código PIX</Text>
+          </TouchableOpacity>
+
+          {/* Feedback de cópia */}
+          <Animated.View style={{ opacity: fadeAnim, marginTop: 8 }}>
+            {copied && (
+              <View style={styles.copiedContainer}>
+                <Text style={styles.copiedText}>✓ Código copiado!</Text>
+              </View>
+            )}
+          </Animated.View>
+
+          {/* Status do pagamento */}
           {polling && paymentStatus === 'pending' && (
-            <View style={{ alignItems: 'center', marginTop: 8 }}>
+            <View style={styles.statusContainer}>
               <ActivityIndicator size="small" color="#e5293e" />
-              <Text style={{ color: '#e5293e', marginTop: 4 }}>Aguardando pagamento...</Text>
+              <Text style={styles.statusText}>Aguardando pagamento...</Text>
             </View>
           )}
+
           {paymentStatus === 'approved' && (
             <Animated.View style={{ opacity: fadeAnim }}>
-              <Text style={{ color: 'green', fontWeight: 'bold', marginTop: 8, fontSize: 16 }}>Pagamento aprovado! Seu pedido está sendo processado.</Text>
+              <View style={styles.successContainer}>
+                <Text style={styles.successText}>✓ Pagamento aprovado!</Text>
+                <Text style={styles.successSubtext}>Seu pedido está sendo processado</Text>
+              </View>
             </Animated.View>
           )}
+
           {paymentStatus === 'rejected' && (
             <Animated.View style={{ opacity: fadeAnim }}>
-              <Text style={{ color: 'red', fontWeight: 'bold', marginTop: 8, fontSize: 16 }}>Pagamento rejeitado ou expirado.</Text>
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>✗ Pagamento rejeitado</Text>
+                <Text style={styles.errorSubtext}>Tente novamente</Text>
+              </View>
             </Animated.View>
           )}
+
+          {/* Instruções adicionais */}
+          <View style={styles.instructionsContainer}>
+            <Text style={styles.instructionTitle}>Como pagar:</Text>
+            <Text style={styles.instructionText}>• Abra seu app bancário</Text>
+            <Text style={styles.instructionText}>• Escaneie o QR Code ou cole o código</Text>
+            <Text style={styles.instructionText}>• Confirme o pagamento</Text>
+          </View>
         </View>
       )}
       <Modal visible={showCardModal} transparent animationType="slide">
@@ -751,7 +1232,14 @@ const CheckoutScreen: React.FC = () => {
               />
               <TextInput style={[styles.input, { flex: 1 }]} placeholder="CVV" value={cardCvv} onChangeText={setCardCvv} maxLength={4} secureTextEntry />
             </View>
-            {cardError ? <Text style={{ color: 'red', marginTop: 4 }}>{cardError}</Text> : null}
+            {cardError ? (
+              <View style={styles.modalFeedbackContainer}>
+                <View style={styles.modalFeedbackError}>
+                  <Text style={styles.modalFeedbackIcon}>⚠️</Text>
+                  <Text style={styles.modalFeedbackErrorText}>{cardError}</Text>
+                </View>
+              </View>
+            ) : null}
             <TouchableOpacity 
               style={[styles.button, { marginTop: 12 }]} 
               onPress={handleSalvarCartao}
@@ -871,7 +1359,9 @@ const CheckoutScreen: React.FC = () => {
                       return;
                     }
                     setUsarCartaoSalvo(true);
+                    setPaymentMethodSelected(true);
                     setShowCardSelectionModal(false);
+                    setSuccess('Cartão selecionado com sucesso!');
                   }}
                   disabled={!savedCardCvv}
                 >
@@ -888,6 +1378,232 @@ const CheckoutScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+      
+      {/* Modal de Pagamento na Entrega */}
+      <Modal visible={showDeliveryPaymentModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 24, width: 320 }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 8, color: '#e5293e' }}>Pagamento na Entrega</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>
+              Selecione como deseja pagar na entrega:
+            </Text>
+            <Text style={{ fontSize: 12, color: '#999', marginBottom: 20, fontStyle: 'italic' }}>
+              ⚠️ Você deve selecionar uma opção para continuar
+            </Text>
+            
+            {/* Opções de pagamento */}
+            <View style={{ marginBottom: 20 }}>
+              <TouchableOpacity 
+                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'dinheiro' && styles.deliveryPaymentOptionSelected]}
+                onPress={() => setFormaPagamentoEntrega('dinheiro')}
+              >
+                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'dinheiro' && styles.deliveryPaymentTextSelected]}>
+                  💵 Dinheiro
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'debito' && styles.deliveryPaymentOptionSelected]}
+                onPress={() => setFormaPagamentoEntrega('debito')}
+              >
+                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'debito' && styles.deliveryPaymentTextSelected]}>
+                  💳 Cartão de Débito
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'credito' && styles.deliveryPaymentOptionSelected]}
+                onPress={() => setFormaPagamentoEntrega('credito')}
+              >
+                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'credito' && styles.deliveryPaymentTextSelected]}>
+                  💳 Cartão de Crédito
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Opções de troco para dinheiro */}
+            {formaPagamentoEntrega === 'dinheiro' && (
+              <View style={{ marginBottom: 20 }}>
+                <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 12, color: '#333' }}>Precisa de troco?</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.trocoOption, precisaTroco && styles.trocoOptionSelected]}
+                  onPress={() => setPrecisaTroco(true)}
+                >
+                  <Text style={[styles.trocoText, precisaTroco && styles.trocoTextSelected]}>Sim</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.trocoOption, !precisaTroco && styles.trocoOptionSelected]}
+                  onPress={() => setPrecisaTroco(false)}
+                >
+                  <Text style={[styles.trocoText, !precisaTroco && styles.trocoTextSelected]}>Não</Text>
+                </TouchableOpacity>
+
+                {precisaTroco && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontSize: 14, color: '#666', marginBottom: 8 }}>Troco para quanto?</Text>
+                    <TextInput
+                      style={styles.trocoInput}
+                      placeholder="Ex: 50.00"
+                      value={trocoParaQuanto}
+                      onChangeText={setTrocoParaQuanto}
+                      keyboardType="numeric"
+                    />
+                    <Text style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                      Total do pedido: R$ {(calculateSubtotal() + taxaEntrega).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* Botões */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={handleCancelDeliveryPayment}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.modalButton, 
+                  styles.modalButtonPrimary,
+                  !formaPagamentoEntrega && { opacity: 0.5 }
+                ]}
+                onPress={handleConfirmDeliveryPayment}
+                disabled={!formaPagamentoEntrega}
+              >
+                <Text style={[
+                  styles.modalButtonTextPrimary,
+                  !formaPagamentoEntrega && { color: '#999' }
+                ]}>
+                  {formaPagamentoEntrega ? 'Confirmar' : 'Selecione uma opção'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Modal de Adicionar Endereço */}
+      <Modal visible={showAddressModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, padding: 24, width: '90%', maxHeight: '80%' }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 8, color: '#e5293e' }}>Adicionar Endereço</Text>
+            <Text style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>
+              Preencha os dados do seu endereço:
+            </Text>
+            
+            {addressModalError && (
+              <View style={styles.modalFeedbackContainer}>
+                <View style={styles.modalFeedbackError}>
+                  <Text style={styles.modalFeedbackIcon}>⚠️</Text>
+                  <Text style={styles.modalFeedbackErrorText}>{addressModalError}</Text>
+                </View>
+              </View>
+            )}
+            
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Nome do endereço (ex: Casa, Trabalho)"
+                value={newAddressLabel}
+                onChangeText={setNewAddressLabel}
+              />
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Rua, Avenida, etc."
+                value={newAddressStreet}
+                onChangeText={setNewAddressStreet}
+              />
+              
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="Número"
+                  value={newAddressNumber}
+                  onChangeText={setNewAddressNumber}
+                  keyboardType="numeric"
+                />
+                <TextInput
+                  style={[styles.modalInput, { flex: 2 }]}
+                  placeholder="Complemento (opcional)"
+                  value={newAddressComplement}
+                  onChangeText={setNewAddressComplement}
+                />
+              </View>
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Bairro"
+                value={newAddressNeighborhood}
+                onChangeText={setNewAddressNeighborhood}
+              />
+              
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 2 }]}
+                  placeholder="Cidade"
+                  value={newAddressCity}
+                  onChangeText={setNewAddressCity}
+                />
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="UF"
+                  value={newAddressState}
+                  onChangeText={setNewAddressState}
+                  maxLength={2}
+                />
+              </View>
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="CEP"
+                value={newAddressZipCode}
+                onChangeText={setNewAddressZipCode}
+                keyboardType="numeric"
+                maxLength={8}
+              />
+            </ScrollView>
+            
+            {/* Botões */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => {
+                  setShowAddressModal(false);
+                  setAddressModalError(null);
+                  setNewAddressLabel('');
+                  setNewAddressStreet('');
+                  setNewAddressNumber('');
+                  setNewAddressComplement('');
+                  setNewAddressNeighborhood('');
+                  setNewAddressCity('');
+                  setNewAddressState('');
+                  setNewAddressZipCode('');
+                }}
+              >
+                <Text style={styles.modalButtonTextSecondary}>Cancelar</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleAddAddress}
+                disabled={loading}
+              >
+                <Text style={styles.modalButtonTextPrimary}>
+                  {loading ? 'Salvando...' : 'Salvar Endereço'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+      </ScrollView>
     </View>
   );
 };
@@ -895,8 +1611,14 @@ const CheckoutScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#fff',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
   },
   list: {
     marginBottom: 16,
@@ -992,6 +1714,13 @@ const styles = StyleSheet.create({
   payButtonTextSelected: {
     color: '#fff',
   },
+  payButtonWarning: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffc107',
+  },
+  payButtonTextWarning: {
+    color: '#856404',
+  },
   resumoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1086,6 +1815,624 @@ const styles = StyleSheet.create({
   modalButtonTextSecondary: {
     color: '#666',
     fontSize: 16,
+    fontWeight: '500',
+  },
+  
+  // Estilos para interface PIX melhorada
+  pixPaymentContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginVertical: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  pixHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pixTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#e5293e',
+  },
+  timerContainer: {
+    alignItems: 'center',
+  },
+  timerCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#e5293e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    shadowColor: '#e5293e',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  timerText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  timerLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  pixInstructions: {
+    fontSize: 16,
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 22,
+  },
+  qrCodeContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  qrCode: {
+    width: 220,
+    height: 220,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: '#e5293e',
+    backgroundColor: '#fff',
+  },
+  qrCodeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  expiredText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  expiredSubtext: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.8,
+  },
+  copyButton: {
+    backgroundColor: '#e5293e',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#e5293e',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  copyButtonDisabled: {
+    backgroundColor: '#ccc',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  copyButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  copiedContainer: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  copiedText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  statusText: {
+    color: '#e5293e',
+    fontSize: 14,
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  successContainer: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  successText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  successSubtext: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.9,
+  },
+  errorContainer: {
+    backgroundColor: '#f44336',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  errorSubtext: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.9,
+  },
+  instructionsContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  instructionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  
+  // Estilos para resumo do pedido melhorado
+  orderSummaryContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  orderItemInfo: {
+    flex: 1,
+  },
+  orderItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    color: '#e5293e',
+    fontWeight: 'bold',
+  },
+  orderItemQuantity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e5293e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginHorizontal: 12,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e9ecef',
+    marginVertical: 12,
+  },
+  totalsContainer: {
+    paddingTop: 8,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  totalRowFinal: {
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingTop: 12,
+    marginTop: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  totalValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+  totalLabelFinal: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  totalValueFinal: {
+    fontSize: 18,
+    color: '#e5293e',
+    fontWeight: 'bold',
+  },
+  successMessage: {
+    backgroundColor: '#d4edda',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#28a745',
+  },
+  successMessageText: {
+    color: '#155724',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  
+  // Estilos para botões de pagamento desabilitados
+  payButtonDisabled: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#ddd',
+    opacity: 0.6,
+  },
+  payButtonTextDisabled: {
+    color: '#999',
+  },
+  
+  // Estilos para modal de pagamento na entrega
+  deliveryPaymentOption: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  deliveryPaymentOptionSelected: {
+    backgroundColor: '#e5293e',
+    borderColor: '#e5293e',
+  },
+  deliveryPaymentText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  deliveryPaymentTextSelected: {
+    color: '#fff',
+  },
+  trocoOption: {
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  trocoOptionSelected: {
+    backgroundColor: '#e5293e',
+    borderColor: '#e5293e',
+  },
+  trocoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  trocoTextSelected: {
+    color: '#fff',
+  },
+  trocoInput: {
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  // Feedback Messages Styles
+  feedbackContainer: {
+    marginVertical: 12,
+    marginHorizontal: 4,
+  },
+  feedbackError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  feedbackSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#22c55e',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  feedbackIcon: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  feedbackErrorText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#dc2626',
+    lineHeight: 20,
+  },
+  feedbackSuccessText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#16a34a',
+    lineHeight: 20,
+  },
+  // Modal Feedback Styles
+  modalFeedbackContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  modalFeedbackError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  modalFeedbackIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  modalFeedbackErrorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#dc2626',
+    lineHeight: 18,
+  },
+  // Address Management Styles
+  manageAddressButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#e5293e',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  manageAddressButtonText: {
+    color: '#e5293e',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  noAddressContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  // Address Card Styles
+  noAddressCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  noAddressIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+    color: '#e5293e',
+  },
+  noAddressTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  noAddressSubtext: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  addAddressButton: {
+    backgroundColor: '#e5293e',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#e5293e',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  addAddressButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Modal Input Styles
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    fontSize: 16,
+    backgroundColor: '#f8f9fa',
+    marginBottom: 12,
+    color: '#333',
+  },
+  // Empty Cart Styles
+  emptyCartContainer: {
+    marginTop: 20,
+    paddingHorizontal: 16,
+  },
+  emptyCartCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  emptyCartIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+    opacity: 0.6,
+  },
+  emptyCartTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyCartSubtext: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  emptyCartButton: {
+    backgroundColor: '#e5293e',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    shadowColor: '#e5293e',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  emptyCartButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  // Empty Order Summary Styles
+  emptyOrderSummary: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  emptyOrderIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+    opacity: 0.6,
+  },
+  emptyOrderText: {
+    fontSize: 16,
+    color: '#6c757d',
     fontWeight: '500',
   },
 });

@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
 import { getUsuarioById } from '../services/usuarioService';
 import { updateOrderStatus } from '../services/orderService';
@@ -21,6 +21,17 @@ interface Pedido {
   status: string;
   createdAt: string;
   itens: PedidoItem[];
+  // Campos de pagamento
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentMethod?: string;
+  totalAmount?: number;
+  // Campos de pagamento na entrega
+  formaPagamentoEntrega?: string;
+  precisaTroco?: boolean;
+  trocoParaQuanto?: number;
+  // Campo de endereço de entrega
+  enderecoEntrega?: string;
 }
 
 interface ClienteInfo {
@@ -45,13 +56,30 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
     message: '',
     type: '',
   });
+  
+  // Estados para atualização automática
+  const [lastUpdateTime, setLastUpdateTime] = useState<number>(Date.now());
+  const [isAutoUpdating, setIsAutoUpdating] = useState<boolean>(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    const fetchPedidos = async () => {
-      try {
-        const response = await api.get(`/pedidos/estabelecimento/${estabelecimento.id}`);
-        setPedidos(response.data);
-        // Buscar dados dos clientes
+  // Função para buscar pedidos com ordenação decrescente por ID
+  const fetchPedidos = useCallback(async (isAutoUpdate = false) => {
+    if (isAutoUpdate) {
+      setIsAutoUpdating(true);
+    }
+    
+    try {
+      const response = await api.get(`/pedidos/estabelecimento/${estabelecimento.id}`);
+      
+      // Ordenar pedidos por ID decrescente (mais recentes primeiro)
+      const pedidosOrdenados = response.data.sort((a: Pedido, b: Pedido) => {
+        return parseInt(b.id) - parseInt(a.id);
+      });
+      
+      setPedidos(pedidosOrdenados);
+      
+      // Buscar dados dos clientes apenas se não for atualização automática
+      if (!isAutoUpdate) {
         const uniqueClienteIds = Array.from(new Set(response.data.map((p: Pedido) => p.clienteId)));
         const clientesObj: { [id: string]: ClienteInfo } = {};
         await Promise.all(
@@ -64,7 +92,8 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
           }),
         );
         setClientes(clientesObj);
-        // Buscar nomes dos produtos
+        
+        // Buscar nomes dos produtos apenas se não for atualização automática
         const uniqueProdutoIds = Array.from(new Set(response.data.flatMap((p: Pedido) => p.itens.map((it) => it.produtoId))));
         const produtosObj: { [id: string]: { nome: string } } = {};
         await Promise.all(
@@ -77,14 +106,67 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
           })
         );
         setProdutos(produtosObj);
-      } catch (err) {
+      }
+      
+      setLastUpdateTime(Date.now());
+    } catch (err) {
+      if (!isAutoUpdate) {
         setError('Erro ao carregar pedidos.');
-      } finally {
+      }
+    } finally {
+      if (isAutoUpdate) {
+        setIsAutoUpdating(false);
+      } else {
         setLoading(false);
       }
-    };
-    fetchPedidos();
+    }
   }, [estabelecimento.id]);
+
+  // Função para iniciar atualização automática
+  const startAutoUpdate = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    
+    // Atualizar a cada 30 segundos quando a tela estiver em foco
+    intervalRef.current = setInterval(() => {
+      fetchPedidos(true);
+    }, 30000);
+  }, [fetchPedidos]);
+
+  // Função para parar atualização automática
+  const stopAutoUpdate = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  // useEffect inicial
+  useEffect(() => {
+    fetchPedidos();
+    
+    // Cleanup ao desmontar
+    return () => {
+      stopAutoUpdate();
+    };
+  }, [fetchPedidos, stopAutoUpdate]);
+
+  // useFocusEffect para atualização automática quando a tela ganha foco
+  useFocusEffect(
+    useCallback(() => {
+      // Atualizar imediatamente quando a tela ganha foco
+      fetchPedidos(true);
+      
+      // Iniciar atualização automática
+      startAutoUpdate();
+      
+      // Cleanup quando a tela perde foco
+      return () => {
+        stopAutoUpdate();
+      };
+    }, [fetchPedidos, startAutoUpdate, stopAutoUpdate])
+  );
 
   const handleUpdateStatus = async (pedidoId: string) => {
     setStatusLoading(pedidoId);
@@ -140,6 +222,92 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
     }
   };
 
+  // Função para renderizar informações de pagamento
+  const renderPaymentInfo = (pedido: Pedido) => {
+    // Se tem formaPagamentoEntrega, é pagamento na entrega
+    if (pedido.formaPagamentoEntrega) {
+      return (
+        <View style={styles.paymentInfoContainer}>
+          <Text style={styles.paymentTitle}>💳 Pagamento na Entrega</Text>
+          <View style={styles.paymentDetails}>
+            <Text style={styles.paymentMethod}>
+              {pedido.formaPagamentoEntrega === 'dinheiro' ? '💵 Dinheiro' : 
+               pedido.formaPagamentoEntrega === 'debito' ? '💳 Cartão de Débito' : 
+               '💳 Cartão de Crédito'}
+            </Text>
+            
+            {pedido.formaPagamentoEntrega === 'dinheiro' && (
+              <View style={styles.trocoInfo}>
+                <Text style={styles.trocoLabel}>Troco:</Text>
+                <Text style={styles.trocoValue}>
+                  {pedido.precisaTroco ? 
+                    `Sim, para R$ ${pedido.trocoParaQuanto?.toFixed(2)}` : 
+                    'Não precisa'
+                  }
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+      );
+    }
+    
+    // Se tem paymentMethod, é pagamento online
+    if (pedido.paymentMethod) {
+      return (
+        <View style={styles.paymentInfoContainer}>
+          <Text style={styles.paymentTitle}>💳 Pagamento Online</Text>
+          <View style={styles.paymentDetails}>
+            <Text style={styles.paymentMethod}>
+              {pedido.paymentMethod === 'pix' ? '📱 PIX' : 
+               pedido.paymentMethod === 'credit_card' ? '💳 Cartão de Crédito' : 
+               '💳 Cartão'}
+            </Text>
+            <Text style={styles.paymentStatus}>
+              Status: {pedido.paymentStatus === 'approved' ? '✅ Aprovado' : 
+                      pedido.paymentStatus === 'pending' ? '⏳ Pendente' : 
+                      pedido.paymentStatus || '❓ Desconhecido'}
+            </Text>
+            {pedido.totalAmount && (
+              <Text style={styles.paymentAmount}>
+                Valor: R$ {pedido.totalAmount.toFixed(2)}
+              </Text>
+            )}
+          </View>
+        </View>
+      );
+    }
+    
+    // Se não tem informações de pagamento
+    return (
+      <View style={styles.paymentInfoContainer}>
+        <Text style={styles.paymentTitle}>❓ Forma de Pagamento</Text>
+        <Text style={styles.paymentMethod}>Não informada</Text>
+      </View>
+    );
+  };
+
+  // Funções auxiliares para status
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pendente': return '#FF6B35';
+      case 'preparo': return '#FFA726';
+      case 'entregue': return '#4CAF50';
+      case 'cancelado': return '#F44336';
+      default: return '#9E9E9E';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pendente': return 'Pendente';
+      case 'preparo': return 'Em Preparo';
+      case 'entregue': return 'Entregue';
+      case 'cancelado': return 'Cancelado';
+      default: return status;
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -158,47 +326,97 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Pedidos de {estabelecimento.nome}</Text>
+      <View style={styles.header}>
+        <Text style={styles.title}>Pedidos de {estabelecimento.nome}</Text>
+        {isAutoUpdating && (
+          <View style={styles.autoUpdateIndicator}>
+            <ActivityIndicator size="small" color="#e5293e" />
+            <Text style={styles.autoUpdateText}>Atualizando...</Text>
+          </View>
+        )}
+      </View>
       <FlatList
         data={pedidos}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.id}>Pedido ID: {item.id}</Text>
-            <Text style={styles.status}>Status: {item.status}</Text>
-            <Text style={styles.date}>Data: {new Date(item.createdAt).toLocaleString()}</Text>
-            <Text style={styles.cliente}>Cliente: {clientes[item.clienteId]?.nome || '...'}</Text>
-            <Text style={styles.subtitle}>Itens:</Text>
-            {item.itens.map((it) => (
-              <Text key={it.id} style={styles.item}>
-                Produto: {produtos[it.produtoId]?.nome || it.produtoId} | Qtd: {it.quantidade} | Preço: R$ {it.precoUnitario.toFixed(2)}
-              </Text>
-            ))}
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: '#007BFF', marginTop: 10, opacity: statusLoading === item.id ? 0.6 : 1 }]}
-              onPress={() => handleUpdateStatus(item.id)}
-              disabled={statusLoading === item.id || item.status === 'entregue' || item.status === 'cancelado'}
-            >
-              <Text style={styles.buttonText}>
-                {statusLoading === item.id
-                  ? 'Atualizando...'
-                  : item.status === 'pendente'
-                  ? 'Avançar para Preparo'
-                  : item.status === 'preparo'
-                  ? 'Marcar como Entregue'
-                  : 'Finalizado'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, { backgroundColor: '#D32F2F', marginTop: 8, opacity: cancelLoading === item.id ? 0.6 : 1 }]}
-              onPress={() => {
-                console.log('🔄 Botão cancelar pressionado para pedido:', item.id);
-                handleCancelOrder(item.id);
-              }}
-              disabled={cancelLoading === item.id || item.status === 'entregue' || item.status === 'cancelado'}
-            >
-              <Text style={styles.buttonText}>{cancelLoading === item.id ? 'Cancelando...' : 'Cancelar Pedido'}</Text>
-            </TouchableOpacity>
+            {/* Header do pedido */}
+            <View style={styles.cardHeader}>
+              <Text style={styles.orderId}>Pedido #{item.id}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+                <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
+              </View>
+            </View>
+            
+            {/* Informações básicas */}
+            <View style={styles.orderInfo}>
+              <Text style={styles.orderDate}>📅 {new Date(item.createdAt).toLocaleString()}</Text>
+              <Text style={styles.customerName}>👤 {clientes[item.clienteId]?.nome || 'Cliente'}</Text>
+            </View>
+            
+            {/* Informações de pagamento */}
+            {renderPaymentInfo(item)}
+            
+            {/* Endereço de entrega */}
+            {item.enderecoEntrega && (
+              <View style={styles.addressContainer}>
+                <Text style={styles.addressTitle}>📍 Endereço de Entrega</Text>
+                <Text style={styles.addressText}>{item.enderecoEntrega}</Text>
+              </View>
+            )}
+            
+            {/* Itens do pedido */}
+            <View style={styles.itemsContainer}>
+              <Text style={styles.itemsTitle}>🛒 Itens do Pedido</Text>
+              {item.itens.map((it) => (
+                <View key={it.id} style={styles.itemRow}>
+                  <Text style={styles.itemName}>{produtos[it.produtoId]?.nome || it.produtoId}</Text>
+                  <Text style={styles.itemDetails}>
+                    {it.quantidade}x R$ {it.precoUnitario.toFixed(2)} = R$ {(it.quantidade * it.precoUnitario).toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+            
+            {/* Total do pedido */}
+            {item.totalAmount && (
+              <View style={styles.totalContainer}>
+                <Text style={styles.totalLabel}>Total:</Text>
+                <Text style={styles.totalValue}>R$ {item.totalAmount.toFixed(2)}</Text>
+              </View>
+            )}
+            
+            {/* Botões de ação */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.primaryButton, { opacity: statusLoading === item.id ? 0.6 : 1 }]}
+                onPress={() => handleUpdateStatus(item.id)}
+                disabled={statusLoading === item.id || item.status === 'entregue' || item.status === 'cancelado'}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {statusLoading === item.id
+                    ? '⏳ Atualizando...'
+                    : item.status === 'pendente'
+                    ? '🍳 Avançar para Preparo'
+                    : item.status === 'preparo'
+                    ? '✅ Marcar como Entregue'
+                    : '✅ Finalizado'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.actionButton, styles.dangerButton, { opacity: cancelLoading === item.id ? 0.6 : 1 }]}
+                onPress={() => {
+                  console.log('🔄 Botão cancelar pressionado para pedido:', item.id);
+                  handleCancelOrder(item.id);
+                }}
+                disabled={cancelLoading === item.id || item.status === 'entregue' || item.status === 'cancelado'}
+              >
+                <Text style={styles.dangerButtonText}>
+                  {cancelLoading === item.id ? '⏳ Cancelando...' : '❌ Cancelar Pedido'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         contentContainerStyle={pedidos.length === 0 ? styles.centered : undefined}
@@ -219,19 +437,263 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 16 },
-  card: { backgroundColor: '#f9f9f9', borderRadius: 8, padding: 16, marginBottom: 12 },
-  id: { fontSize: 16, fontWeight: 'bold' },
-  status: { fontSize: 14, color: '#666' },
-  date: { fontSize: 14, color: '#888', marginBottom: 8 },
-  cliente: { fontSize: 14, color: '#222', marginBottom: 4 },
-  subtitle: { fontWeight: 'bold', marginTop: 8 },
-  item: { fontSize: 13, color: '#333' },
-  button: { borderRadius: 8, padding: 12, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  errorText: { color: 'red', fontSize: 16 },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#f5f5f5',
+    paddingTop: 20,
+  },
+  
+  // Header styles
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    marginHorizontal: 16,
+  },
+  title: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    color: '#333',
+    flex: 1,
+  },
+  autoUpdateIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  autoUpdateText: {
+    fontSize: 12,
+    color: '#e5293e',
+    marginLeft: 6,
+    fontWeight: '500',
+  },
+  
+  // Card styles (iFood style)
+  card: { 
+    backgroundColor: '#fff', 
+    borderRadius: 16, 
+    padding: 20, 
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  
+  // Header do pedido
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  orderId: { 
+    fontSize: 18, 
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  // Informações básicas
+  orderInfo: {
+    marginBottom: 16,
+  },
+  orderDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  customerName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  
+  // Informações de pagamento
+  paymentInfoContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  paymentTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#e5293e',
+    marginBottom: 8,
+  },
+  paymentDetails: {
+    marginLeft: 8,
+  },
+  paymentMethod: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  paymentStatus: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  paymentAmount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#e5293e',
+  },
+  trocoInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  trocoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 8,
+  },
+  trocoValue: {
+    fontSize: 14,
+    color: '#666',
+  },
+  
+  // Endereço de entrega
+  addressContainer: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#bbdefb',
+  },
+  addressTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1976d2',
+    marginBottom: 8,
+  },
+  addressText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 20,
+  },
+  
+  // Itens do pedido
+  itemsContainer: {
+    marginBottom: 16,
+  },
+  itemsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  itemName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
+    flex: 1,
+  },
+  itemDetails: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  
+  // Total
+  totalContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#e5293e',
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  
+  // Botões de ação
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    backgroundColor: '#e5293e',
+  },
+  dangerButton: {
+    backgroundColor: '#dc3545',
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  dangerButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  
+  // Estilos antigos (mantidos para compatibilidade)
+  centered: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  errorText: { 
+    color: 'red', 
+    fontSize: 16 
+  },
   snackbar: {
     position: 'absolute',
     bottom: 30,
@@ -241,7 +703,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
   },
-  snackbarText: { color: '#fff', fontWeight: 'bold' },
+  snackbarText: { 
+    color: '#fff', 
+    fontWeight: 'bold' 
+  },
 });
 
 export default PedidosDoEstabelecimentoScreen;

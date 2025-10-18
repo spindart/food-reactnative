@@ -208,30 +208,71 @@ export class MercadoPagoService {
       throw new Error(error.message || 'Erro ao criar pagamento com cartão Mercado Pago');
     }
   }
-  static async createPixPayment({ amount, description, payerEmail }: { amount: number; description: string; payerEmail: string }) {
+  static async createPixPayment({ amount, description, payerEmail, payerFirstName, payerLastName, payerCpf, payerAddress }: { 
+    amount: number; 
+    description: string; 
+    payerEmail: string;
+    payerFirstName?: string;
+    payerLastName?: string;
+    payerCpf?: string;
+    payerAddress?: any;
+  }) {
     try {
       console.log('Criando pagamento PIX:', { amount, description, payerEmail });
       
+      // Preparar dados do payer conforme documentação oficial
+      const payerData: any = {
+        email: payerEmail,
+      };
+
+      // Adicionar dados opcionais se fornecidos
+      if (payerFirstName) payerData.first_name = payerFirstName;
+      if (payerLastName) payerData.last_name = payerLastName;
+      
+      // Adicionar identificação (CPF) se fornecida
+      if (payerCpf) {
+        payerData.identification = {
+          type: "CPF",
+          number: payerCpf.replace(/\D/g, '') // Remove formatação
+        };
+      }
+
+      // Adicionar endereço se fornecido
+      if (payerAddress) {
+        payerData.address = payerAddress;
+      }
+
+      // Gerar chave de idempotência única
+      const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       const payment = new Payment(client);
       const result = await payment.create({
         body: {
           transaction_amount: amount,
           description,
           payment_method_id: 'pix',
-          payer: {
-            email: payerEmail,
-          },
+          payer: payerData,
+          // Data de expiração padrão: 24 horas (conforme documentação)
+          date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+        requestOptions: {
+          idempotencyKey: idempotencyKey,
         },
       });
       
       console.log('Pagamento PIX criado com sucesso:', result.id);
+      console.log('QR Code disponível:', !!result.point_of_interaction?.transaction_data?.qr_code);
       
-      // Retorna info PIX: qr_code, qr_code_base64, paymentId
+      // Retorna info PIX conforme documentação oficial
       return {
         paymentId: result.id,
         status: result.status,
+        status_detail: result.status_detail,
         qr_code: result.point_of_interaction?.transaction_data?.qr_code,
         qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
+        ticket_url: result.point_of_interaction?.transaction_data?.ticket_url,
+        transaction_id: result.point_of_interaction?.transaction_data?.transaction_id,
+        date_of_expiration: result.date_of_expiration,
       };
     } catch (error: any) {
       console.error('Erro detalhado MercadoPago PIX:', {

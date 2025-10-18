@@ -16,6 +16,10 @@ type Pedido = {
   formaPagamento?: string;
   estabelecimento?: { nome: string; imagem?: string };
   total?: number;
+  // Campos de pagamento na entrega
+  formaPagamentoEntrega?: string;
+  precisaTroco?: boolean;
+  trocoParaQuanto?: number;
 };
 
 const PedidoListScreen: React.FC = () => {
@@ -193,6 +197,33 @@ const PedidoListScreen: React.FC = () => {
                   <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Data: <Text style={{ fontWeight: 'normal' }}>{new Date(selectedPedido.createdAt).toLocaleString()}</Text></Text>
                   {selectedPedido.formaPagamento && (
                     <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Forma de Pagamento: <Text style={{ fontWeight: 'normal' }}>{selectedPedido.formaPagamento}</Text></Text>
+                  )}
+                  
+                  {/* Informações de pagamento na entrega */}
+                  {selectedPedido.formaPagamentoEntrega && (
+                    <View style={styles.deliveryPaymentInfo}>
+                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>💳 Pagamento na Entrega:</Text>
+                      <Text style={{ marginLeft: 16, marginBottom: 2 }}>
+                        <Text style={{ fontWeight: 'bold' }}>Forma: </Text>
+                        <Text>{selectedPedido.formaPagamentoEntrega === 'dinheiro' ? '💵 Dinheiro' : 
+                               selectedPedido.formaPagamentoEntrega === 'debito' ? '💳 Cartão de Débito' : 
+                               '💳 Cartão de Crédito'}</Text>
+                      </Text>
+                      
+                      {selectedPedido.precisaTroco && (
+                        <Text style={{ marginLeft: 16, marginBottom: 2 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Troco: </Text>
+                          <Text>Sim, para R$ {selectedPedido.trocoParaQuanto?.toFixed(2)}</Text>
+                        </Text>
+                      )}
+                      
+                      {selectedPedido.precisaTroco === false && (
+                        <Text style={{ marginLeft: 16, marginBottom: 2 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Troco: </Text>
+                          <Text>Não precisa</Text>
+                        </Text>
+                      )}
+                    </View>
                   )}
                   <Text style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Itens do pedido:</Text>
                   {selectedPedido.itens && selectedPedido.itens.length > 0 ? (
@@ -568,6 +599,16 @@ const styles = StyleSheet.create({
   pedidoId: {
     fontSize: 14,
     color: '#666',
+  },
+  
+  // Estilos para informações de pagamento na entrega
+  deliveryPaymentInfo: {
+    backgroundColor: '#fff5f5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
   },
 });
 

@@ -88,6 +88,14 @@ model Pedido {
   refundStatus      String?         // Status do reembolso (approved, pending, etc)
   refundAmount      Float?          // Valor reembolsado
   refundDate        DateTime?       // Data do reembolso
+  
+  // Campos para pagamento na entrega
+  formaPagamentoEntrega String?     // dinheiro, debito, credito
+  precisaTroco         Boolean?     // true/false
+  trocoParaQuanto      Float?       // valor do troco solicitado
+  
+  // Campo para endereço de entrega
+  enderecoEntrega      String?      // endereço completo de entrega
 }
 
 model ItemPedido {
