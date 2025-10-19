@@ -378,6 +378,7 @@ const CheckoutScreen: React.FC = () => {
       setUsarCartaoSalvo(true);
       setPaymentMethodSelected(true);
       console.log('✅ Novo cartão definido como padrão:', response.cartao);
+      console.log('✅ paymentMethodSelected definido como true');
       
       // Fechar modal e limpar campos
       setShowCardModal(false);
@@ -396,19 +397,32 @@ const CheckoutScreen: React.FC = () => {
       console.log('❌ Erro message:', err.message);
       console.log('❌ Erro stack:', err.stack);
       setCardError(err.message || 'Erro ao salvar cartão');
+      // Limpar erro principal para não impedir confirmação do pedido
+      setError(null);
     } finally {
       console.log('🏁 Finalizando salvamento do cartão');
       setLoading(false);
     }
   };
 
+  // Função para limpar todos os estados de erro
+  const limparEstadosDeErro = () => {
+    setError(null);
+    setCardError('');
+    setSuccess(null);
+    setPaymentProcessing(false);
+    setOrderConfirmed(false);
+    // NÃO limpar paymentMethodSelected aqui para não interferir no fluxo
+  };
+
   // Função para selecionar método de pagamento
   const handlePaymentMethodSelect = (method: 'dinheiro' | 'cartao' | 'pix') => {
     if (orderConfirmed || paymentProcessing) return; // Não permite trocar após confirmar
     
+    // Limpar todos os estados de erro ao mudar forma de pagamento
+    limparEstadosDeErro();
+    
     setPagamento(method);
-    setError(null);
-    setSuccess(null);
     setPaymentMethodSelected(false); // Resetar seleção anterior
     
     // Se for dinheiro, mostrar modal de pagamento na entrega
@@ -794,6 +808,8 @@ const CheckoutScreen: React.FC = () => {
           console.log('Erro na chamada createCardPayment:', err);
           setError('Erro ao chamar backend: ' + (err?.message || err));
           setLoading(false);
+          setPaymentProcessing(false);
+          setOrderConfirmed(false);
           return;
         }
         console.log('Resposta do backend (cartao):', cardResp);
@@ -1084,7 +1100,18 @@ const CheckoutScreen: React.FC = () => {
             opacity: (orderConfirmed || paymentProcessing) ? 0.7 : 1
           }
         ]}
-        onPress={handleConfirmOrder}
+        onPress={() => {
+          console.log('🔄 Botão Confirmar Pedido pressionado');
+          console.log('🔄 Estados:', { 
+            loading, 
+            cartItemsLength: cartItems.length, 
+            pagamento, 
+            paymentMethodSelected, 
+            orderConfirmed, 
+            paymentProcessing 
+          });
+          handleConfirmOrder();
+        }}
         disabled={loading || cartItems.length === 0 || !pagamento || !paymentMethodSelected || orderConfirmed || paymentProcessing}
       >
         <Text style={styles.buttonText}>
@@ -1256,6 +1283,8 @@ const CheckoutScreen: React.FC = () => {
               setCardName('');
               setCardExp('');
               setCardCvv('');
+              // Limpar estados de erro para não impedir confirmação
+              limparEstadosDeErro();
             }}>
               <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Cancelar</Text>
             </Pressable>
@@ -1372,7 +1401,11 @@ const CheckoutScreen: React.FC = () => {
               )}
             </View>
             
-            <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => setShowCardSelectionModal(false)}>
+            <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => {
+              setShowCardSelectionModal(false);
+              // Limpar estados de erro para não impedir confirmação
+              limparEstadosDeErro();
+            }}>
               <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Cancelar</Text>
             </Pressable>
           </View>

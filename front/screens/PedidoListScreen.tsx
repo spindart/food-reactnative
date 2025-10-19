@@ -20,6 +20,11 @@ type Pedido = {
   formaPagamentoEntrega?: string;
   precisaTroco?: boolean;
   trocoParaQuanto?: number;
+  // Campos de pagamento online
+  paymentMethod?: string;
+  paymentStatus?: string;
+  // Endereço de entrega
+  enderecoEntrega?: string;
 };
 
 const PedidoListScreen: React.FC = () => {
@@ -158,6 +163,35 @@ const PedidoListScreen: React.FC = () => {
                   <Text style={{ fontSize: 18, marginRight: 6 }}>{statusInfo.icon}</Text>
                   <Text style={[styles.status, { color: statusInfo.color }]}>{statusInfo.label}</Text>
                 </View>
+                
+                {/* Endereço de entrega */}
+                {item.enderecoEntrega && (
+                  <View style={styles.addressContainer}>
+                    <Text style={styles.addressIcon}>📍</Text>
+                    <Text style={styles.addressText} numberOfLines={1}>
+                      {item.enderecoEntrega}
+                    </Text>
+                  </View>
+                )}
+                
+                {/* Forma de pagamento */}
+                {(item.formaPagamentoEntrega || item.paymentMethod) && (
+                  <View style={styles.paymentContainer}>
+                    <Text style={styles.paymentIcon}>
+                      {item.formaPagamentoEntrega ? '💳' : 
+                       item.paymentMethod === 'pix' ? '📱' : '💳'}
+                    </Text>
+                    <Text style={styles.paymentText}>
+                      {item.formaPagamentoEntrega ? 
+                        `Pagamento na entrega: ${item.formaPagamentoEntrega === 'dinheiro' ? 'Dinheiro' : 
+                         item.formaPagamentoEntrega === 'debito' ? 'Cartão de Débito' : 'Cartão de Crédito'}` :
+                        item.paymentMethod === 'pix' ? 'PIX' : 
+                        item.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : 
+                        item.paymentMethod || 'Pagamento online'}
+                    </Text>
+                  </View>
+                )}
+                
                 <Text style={styles.date}>Data: {new Date(item.createdAt).toLocaleString()}</Text>
               </View>
             </TouchableOpacity>
@@ -195,6 +229,46 @@ const PedidoListScreen: React.FC = () => {
                   </View>
                   <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Status: <Text style={{ color: statusMap[selectedPedido.status]?.color || '#888' }}>{statusMap[selectedPedido.status]?.label || selectedPedido.status}</Text></Text>
                   <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Data: <Text style={{ fontWeight: 'normal' }}>{new Date(selectedPedido.createdAt).toLocaleString()}</Text></Text>
+                  
+                  {/* Endereço de entrega */}
+                  {selectedPedido.enderecoEntrega && (
+                    <View style={styles.deliveryAddressInfo}>
+                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>📍 Endereço de Entrega:</Text>
+                      <Text style={{ marginLeft: 16, marginBottom: 8, fontSize: 16, lineHeight: 22 }}>
+                        {selectedPedido.enderecoEntrega}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* Forma de pagamento online */}
+                  {selectedPedido.paymentMethod && !selectedPedido.formaPagamentoEntrega && (
+                    <View style={styles.onlinePaymentInfo}>
+                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>💳 Pagamento Online:</Text>
+                      <Text style={{ marginLeft: 16, marginBottom: 8 }}>
+                        <Text style={{ fontWeight: 'bold' }}>Forma: </Text>
+                        <Text>
+                          {selectedPedido.paymentMethod === 'pix' ? '📱 PIX' : 
+                           selectedPedido.paymentMethod === 'credit_card' ? '💳 Cartão de Crédito' : 
+                           selectedPedido.paymentMethod}
+                        </Text>
+                      </Text>
+                      {selectedPedido.paymentStatus && (
+                        <Text style={{ marginLeft: 16, marginBottom: 8 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Status: </Text>
+                          <Text style={{ 
+                            color: selectedPedido.paymentStatus === 'approved' ? '#2ecc71' : 
+                                   selectedPedido.paymentStatus === 'pending' ? '#f39c12' : '#e74c3c',
+                            fontWeight: 'bold'
+                          }}>
+                            {selectedPedido.paymentStatus === 'approved' ? '✅ Aprovado' :
+                             selectedPedido.paymentStatus === 'pending' ? '⏳ Pendente' :
+                             selectedPedido.paymentStatus}
+                          </Text>
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  
                   {selectedPedido.formaPagamento && (
                     <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Forma de Pagamento: <Text style={{ fontWeight: 'normal' }}>{selectedPedido.formaPagamento}</Text></Text>
                   )}
@@ -609,6 +683,69 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#fecaca',
+  },
+  
+  // Estilos para endereço de entrega
+  deliveryAddressInfo: {
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#b3d9ff',
+  },
+  
+  // Estilos para pagamento online
+  onlinePaymentInfo: {
+    backgroundColor: '#f0fff0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#c3e6c3',
+  },
+  
+  // Estilos para lista de pedidos
+  addressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    marginRight: 16,
+  },
+  addressIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  addressText: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
+  },
+  
+  paymentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 16,
+    marginBottom: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 6,
+    marginRight: 16,
+  },
+  paymentIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  paymentText: {
+    fontSize: 13,
+    color: '#666',
+    flex: 1,
   },
 });
 

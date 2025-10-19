@@ -13,6 +13,12 @@ const MeusCartoesScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addingCard, setAddingCard] = useState(false);
+  
+  // Estado para controlar operação de definir padrão
+  const [definindoPadrao, setDefinindoPadrao] = useState<number | null>(null);
+  
+  // Estado para forçar re-render
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Estados para o formulário de adicionar cartão
   const [cardNumber, setCardNumber] = useState('');
@@ -32,7 +38,20 @@ const MeusCartoesScreen: React.FC = () => {
     }, [])
   );
 
-  const carregarCartoes = async () => {
+  // Função para forçar atualização completa
+  const forcarAtualizacao = async () => {
+    console.log('🔄 MeusCartoesScreen - Forçando atualização completa...');
+    
+    // Usar carregarCartoes com refresh forçado
+    await carregarCartoes(true);
+    
+    // Forçar re-render múltiplas vezes
+    setRefreshKey(prev => prev + 1);
+    setTimeout(() => setRefreshKey(prev => prev + 1), 100);
+    setTimeout(() => setRefreshKey(prev => prev + 1), 200);
+  };
+
+  const carregarCartoes = async (forceRefresh = false) => {
     try {
       setLoading(true);
       const user = await getCurrentUser();
@@ -41,10 +60,46 @@ const MeusCartoesScreen: React.FC = () => {
         return;
       }
       
+      console.log('🔄 MeusCartoesScreen - Carregando cartões para usuário:', user.id, 'forceRefresh:', forceRefresh);
+      
+      // Limpar estado atual se forçar refresh
+      if (forceRefresh) {
+        console.log('🔄 MeusCartoesScreen - Limpando estado atual para refresh forçado');
+        setCartoes([]);
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       const cartoesData = await getCartoes(user.id);
       console.log('📱 MeusCartoesScreen - Cartões carregados:', cartoesData);
-      setCartoes(cartoesData);
+      console.log('📱 MeusCartoesScreen - Quantidade de cartões:', cartoesData.length);
+      
+      // Log detalhado de cada cartão
+      cartoesData.forEach((cartao, index) => {
+        console.log(`📱 MeusCartoesScreen - Cartão ${index + 1}:`, {
+          id: cartao.id,
+          lastFourDigits: cartao.lastFourDigits,
+          isDefault: cartao.isDefault,
+          isDefaultType: typeof cartao.isDefault,
+          paymentMethodId: cartao.paymentMethodId
+        });
+      });
+      
+      // Garantir que isDefault seja boolean
+      const cartoesComTipoCorreto = cartoesData.map(cartao => ({
+        ...cartao,
+        isDefault: Boolean(cartao.isDefault)
+      }));
+      
+      setCartoes(cartoesComTipoCorreto);
+      console.log('✅ MeusCartoesScreen - Estado atualizado com cartões:', cartoesComTipoCorreto);
+      
+      // Forçar re-render após atualizar estado
+      if (forceRefresh) {
+        console.log('🔄 MeusCartoesScreen - Forçando re-render após refresh');
+        setRefreshKey(prev => prev + 1);
+      }
     } catch (err) {
+      console.error('❌ MeusCartoesScreen - Erro ao carregar cartões:', err);
       setError('Erro ao carregar cartões');
     } finally {
       setLoading(false);
@@ -75,15 +130,61 @@ const MeusCartoesScreen: React.FC = () => {
   };
 
   const handleDefinirPadrao = async (cartaoId: number) => {
+    if (definindoPadrao === cartaoId) {
+      console.log('⚠️ MeusCartoesScreen - Operação já em andamento para cartão:', cartaoId);
+      return;
+    }
+    
     try {
-      const user = await getCurrentUser();
-      if (!user?.id) return;
+      setDefinindoPadrao(cartaoId);
+      console.log('🔄 MeusCartoesScreen - Iniciando definição de cartão padrão:', cartaoId);
       
-      await definirCartaoPadrao(cartaoId, user.id);
-      await carregarCartoes();
+      const user = await getCurrentUser();
+      if (!user?.id) {
+        console.error('❌ MeusCartoesScreen - Usuário não encontrado');
+        Alert.alert('Erro', 'Usuário não autenticado');
+        return;
+      }
+      
+      console.log('🔄 MeusCartoesScreen - Chamando definirCartaoPadrao com:', { cartaoId, usuarioId: user.id });
+      
+      const result = await definirCartaoPadrao(cartaoId, user.id);
+      console.log('✅ MeusCartoesScreen - Resultado da definição:', result);
+      console.log('✅ MeusCartoesScreen - Tipo do resultado:', typeof result);
+      console.log('✅ MeusCartoesScreen - Resultado completo:', JSON.stringify(result, null, 2));
+      
+      // Atualizar estado local imediatamente
+      console.log('🔄 MeusCartoesScreen - Atualizando estado local imediatamente...');
+      setCartoes(prevCartoes => {
+        const updatedCartoes = prevCartoes.map(cartao => ({
+          ...cartao,
+          isDefault: cartao.id === cartaoId
+        }));
+        console.log('🔄 MeusCartoesScreen - Estado local atualizado:', updatedCartoes);
+        return updatedCartoes;
+      });
+      
+      // Forçar atualização completa
+      await forcarAtualizacao();
+      
+      // Teste adicional: verificar se os dados estão corretos
+      console.log('🔍 MeusCartoesScreen - Teste adicional: verificando dados após atualização');
+      if (user?.id) {
+        const cartoesTeste = await getCartoes(user.id);
+        console.log('🔍 MeusCartoesScreen - Dados frescos da API:', cartoesTeste);
+        console.log('🔍 MeusCartoesScreen - Estado local atual:', cartoes);
+      }
+      
       Alert.alert('Sucesso', 'Cartão definido como padrão');
-    } catch (err) {
-      Alert.alert('Erro', 'Erro ao definir cartão padrão');
+    } catch (err: any) {
+      console.error('❌ MeusCartoesScreen - Erro ao definir cartão padrão:', err);
+      console.error('❌ MeusCartoesScreen - Status:', err.response?.status);
+      console.error('❌ MeusCartoesScreen - Data:', err.response?.data);
+      console.error('❌ MeusCartoesScreen - Message:', err.message);
+      
+      Alert.alert('Erro', `Erro ao definir cartão padrão: ${err.response?.data?.error || err.message}`);
+    } finally {
+      setDefinindoPadrao(null);
     }
   };
 
@@ -158,7 +259,16 @@ const MeusCartoesScreen: React.FC = () => {
     return limited;
   };
 
-  const renderCartao = ({ item }: { item: Cartao }) => (
+  const renderCartao = ({ item }: { item: Cartao }) => {
+    console.log(`🔄 MeusCartoesScreen - Renderizando cartão ${item.lastFourDigits}:`, {
+      id: item.id,
+      isDefault: item.isDefault,
+      isDefaultType: typeof item.isDefault,
+      shouldShowBadge: Boolean(item.isDefault),
+      refreshKey: refreshKey
+    });
+    
+    return (
     <View style={styles.cartaoCard}>
       <View style={styles.cartaoHeader}>
         <View style={styles.cartaoInfo}>
@@ -182,11 +292,23 @@ const MeusCartoesScreen: React.FC = () => {
       <View style={styles.cartaoActions}>
         {!item.isDefault && (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleDefinirPadrao(item.id)}
+            style={[styles.actionButton, definindoPadrao === item.id && styles.disabledButton]}
+            onPress={() => {
+              console.log('🔄 MeusCartoesScreen - Botão "Definir como padrão" pressionado para cartão:', item.id);
+              console.log('🔄 MeusCartoesScreen - Tipo do ID:', typeof item.id);
+              console.log('🔄 MeusCartoesScreen - Cartão completo:', item);
+              handleDefinirPadrao(item.id);
+            }}
+            disabled={definindoPadrao === item.id}
           >
-            <Ionicons name="star-outline" size={20} color="#e5293e" />
-            <Text style={styles.actionText}>Definir como padrão</Text>
+            {definindoPadrao === item.id ? (
+              <ActivityIndicator size="small" color="#e5293e" />
+            ) : (
+              <Ionicons name="star-outline" size={20} color="#e5293e" />
+            )}
+            <Text style={styles.actionText}>
+              {definindoPadrao === item.id ? 'Definindo...' : 'Definir como padrão'}
+            </Text>
           </TouchableOpacity>
         )}
         
@@ -199,7 +321,8 @@ const MeusCartoesScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
     </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -242,6 +365,7 @@ const MeusCartoesScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          key={refreshKey}
           data={cartoes}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderCartao}

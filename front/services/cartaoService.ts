@@ -28,7 +28,7 @@ export const getCartoes = async (usuarioId: number): Promise<Cartao[]> => {
   try {
     const response = await api.get(`/cartoes/usuario/${usuarioId}`);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao listar cartões:', error);
     throw error;
   }
@@ -39,18 +39,37 @@ export const adicionarCartao = async (payload: AdicionarCartaoPayload): Promise<
   try {
     const response = await api.post('/cartoes/adicionar', payload);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao adicionar cartão:', error);
-    throw error;
+    
+    // Tratar erro específico de cartão duplicado
+    if (error.response?.status === 400 && error.response?.data?.error) {
+      throw new Error(error.response.data.error);
+    }
+    
+    // Tratar outros erros
+    throw new Error(error.response?.data?.message || error.message || 'Erro ao adicionar cartão');
   }
 };
 
 // Definir cartão como padrão
 export const definirCartaoPadrao = async (cartaoId: number, usuarioId: number): Promise<{ success: boolean; cartao: Cartao; message: string }> => {
   try {
-    const response = await api.put('/cartoes/padrao', { cartaoId, usuarioId });
+    // console.log('🔄 cartaoService - Definindo cartão padrão:', { cartaoId, usuarioId });
+    
+    const payload = { cartaoId, usuarioId };
+    // console.log('🔄 cartaoService - Payload enviado:', payload);
+    
+    // Verificar se o token está presente
+    const token = await api.defaults.headers.common['Authorization'];
+    // console.log('🔄 cartaoService - Token presente:', !!token);
+    // console.log('🔄 cartaoService - Token (primeiros 20 chars):', token ? token.substring(0, 20) + '...' : 'NENHUM');
+    
+    const response = await api.put('/cartoes/padrao', payload);
+    // console.log('✅ cartaoService - Resposta recebida:', response.data);
+    
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Erro ao definir cartão padrão:', error);
     throw error;
   }
