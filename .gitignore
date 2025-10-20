@@ -8,3 +8,9 @@ test-fluxo-completo.sh
 test-mastercard-debug.js
 test-mastercard-especifico.sh
 MERCADOPAGO_INTEGRATION.md
+GUIA_TESTE_PIX.md
+test-pix.js
+test-pix.sh
+webhook-validation-example.js
+approve-pix.js
+force-approve-pix.js
