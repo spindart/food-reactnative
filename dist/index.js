@@ -33,6 +33,13 @@ app.use('/api/cartoes', cartao_routes_1.default);
 app.get('/', (req, res) => {
     res.send('Hello, World!');
 });
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
 app.use(error_middleware_1.errorHandler);
 const server = http_1.default.createServer(app);
 (0, notification_service_1.initNotificationWebSocket)(server);

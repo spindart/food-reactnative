@@ -48,10 +48,21 @@ router.post('/pix', async function(req, res) {
 // POST /pagamento/cartao
 router.post('/cartao', async function(req, res) {
   console.log('Recebido /pagamento/cartao:', req.body);
-    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId } = req.body;
+    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId, cardExp, cardName, cardCvv } = req.body;
   
-  if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
-    return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
+  // Validação condicional: para cartão salvo não exigimos token; para cartão novo token é obrigatório
+  if (!amount || !description || !payerEmail || !installments || !paymentMethodId) {
+    return res.status(400).json({ error: 'amount, description, payerEmail, installments e paymentMethodId são obrigatórios' });
+  }
+
+  if (usarCartaoSalvo) {
+    if (!cartaoId || !securityCode) {
+      return res.status(400).json({ error: 'Para cartão salvo, cartaoId e securityCode são obrigatórios' });
+    }
+  } else {
+    if (!token) {
+      return res.status(400).json({ error: 'token é obrigatório para pagamento com cartão novo' });
+    }
   }
   
   try {
@@ -107,6 +118,115 @@ router.post('/cartao', async function(req, res) {
         paymentMethodId: finalPaymentMethodId, 
         issuerId 
       });
+
+      // Se o pagamento foi aprovado, salvar o cartão automaticamente
+      console.log('🔍 Verificando status do pagamento:', {
+        status: payment.status,
+        status_detail: payment.status_detail,
+        hasCardNumber: !!cardNumber,
+        cardNumberLength: cardNumber?.length
+      });
+      
+      // Considerar pagamento como aprovado se status for 'approved' ou 'pending' (que pode ser aprovado posteriormente)
+      if ((payment.status === 'approved' || payment.status === 'pending') && cardNumber) {
+        console.log('✅ Pagamento aprovado! Salvando cartão automaticamente...');
+        
+        try {
+          // Buscar usuário pelo email
+          const { PrismaClient } = require('@prisma/client');
+          const prisma = new PrismaClient();
+          
+          const usuario = await prisma.usuario.findFirst({
+            where: { email: payerEmail }
+          });
+          
+          if (usuario) {
+            // Criar ou obter customer no MercadoPago
+            let customerId = usuario.mercadoPagoCustomerId;
+            if (!customerId) {
+              const customer = await MercadoPagoService.createCustomer(usuario.email);
+              customerId = customer.id;
+              
+              // Atualizar usuário com customer ID
+              await prisma.usuario.update({
+                where: { id: usuario.id },
+                data: { mercadoPagoCustomerId: customerId }
+              });
+            }
+
+            // Adicionar cartão ao customer no MercadoPago
+            const mercadoPagoCard = await MercadoPagoService.addCardToCustomer(
+              customerId!,
+              token
+            );
+
+            // Extrair dados do cartão
+            const cleanCardNumber = cardNumber.replace(/\s/g, '');
+            const lastFourDigits = cleanCardNumber.slice(-4);
+            const firstSixDigits = cleanCardNumber.slice(0, 6);
+            
+            const expParts = req.body.cardExp?.split('/') || ['01', '30'];
+            const expirationMonth = parseInt(expParts[0], 10);
+            const expirationYear = parseInt(expParts[1], 10) + 2000;
+
+            // Verificar se o cartão já existe
+            console.log('🔍 Verificando se cartão já existe:', {
+              mercadoPagoCardId: mercadoPagoCard.id,
+              usuarioId: usuario.id
+            });
+            
+            const cartaoExistente = await prisma.cartao.findFirst({
+              where: { 
+                mercadoPagoCardId: mercadoPagoCard.id,
+                usuarioId: usuario.id
+              }
+            });
+
+            if (!cartaoExistente) {
+              // Verificar se é o primeiro cartão (será o padrão)
+              const existingCartoes = await prisma.cartao.count({
+                where: { usuarioId: usuario.id }
+              });
+              const isDefault = existingCartoes === 0;
+              
+              console.log('🔍 Dados do cartão para salvar:', {
+                usuarioId: usuario.id,
+                mercadoPagoCardId: mercadoPagoCard.id,
+                lastFourDigits,
+                firstSixDigits,
+                expirationMonth,
+                expirationYear,
+                paymentMethodId: finalPaymentMethodId,
+                isDefault,
+                existingCartoes
+              });
+
+              // Salvar cartão no banco
+              const cartaoSalvo = await prisma.cartao.create({
+                data: {
+                  usuarioId: usuario.id,
+                  mercadoPagoCardId: mercadoPagoCard.id,
+                  lastFourDigits,
+                  firstSixDigits,
+                  expirationMonth,
+                  expirationYear,
+                  paymentMethodId: finalPaymentMethodId,
+                  isDefault
+                }
+              });
+              
+              console.log('✅ Cartão salvo automaticamente após pagamento aprovado:', cartaoSalvo);
+            } else {
+              console.log('⚠️ Cartão já existe, não salvando novamente:', cartaoExistente);
+            }
+          }
+          
+          await prisma.$disconnect();
+        } catch (saveError) {
+          console.error('❌ Erro ao salvar cartão automaticamente:', saveError);
+          // Não falhar o pagamento por causa do erro de salvamento
+        }
+      }
     }
     
     // Pedido será criado após pagamento aprovado no frontend
@@ -174,6 +294,145 @@ router.get('/mercadopago/status/:id', async function(req, res) {
     return res.status(200).json(status);
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /pagamento/webhook/mercadopago - Webhook do Mercado Pago
+router.post('/webhook/mercadopago', async (req, res) => {
+  try {
+    console.log('🔔 Webhook recebido:', req.body);
+    
+    const { type, data } = req.body;
+    
+    // Verificar se é uma notificação de pagamento
+    if (type === 'payment' && data?.id) {
+      const paymentId = data.id;
+      console.log(`💰 Verificando pagamento: ${paymentId}`);
+      
+      // Buscar status atual do pagamento
+      const paymentStatus = await MercadoPagoService.getPaymentStatus(paymentId);
+      console.log(`📊 Status do pagamento ${paymentId}:`, paymentStatus);
+      
+      if (paymentStatus.status === 'approved') {
+        console.log('✅ Pagamento aprovado! Processando...');
+        
+        // Aqui você pode:
+        // 1. Atualizar o pedido no banco de dados
+        // 2. Enviar email de confirmação
+        // 3. Notificar o frontend via WebSocket
+        // 4. Processar outras ações pós-pagamento
+        
+        res.status(200).json({ 
+          success: true, 
+          message: 'Webhook processado com sucesso',
+          paymentId,
+          status: paymentStatus.status
+        });
+      } else {
+        console.log(`⏳ Pagamento ainda pendente: ${paymentStatus.status}`);
+        res.status(200).json({ 
+          success: true, 
+          message: 'Webhook recebido, pagamento pendente',
+          paymentId,
+          status: paymentStatus.status
+        });
+      }
+    } else {
+      console.log('❓ Tipo de webhook não reconhecido:', type);
+      res.status(200).json({ success: true, message: 'Webhook recebido' });
+    }
+  } catch (error) {
+    console.error('❌ Erro ao processar webhook:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro interno do servidor' 
+    });
+  }
+});
+
+// POST /pagamento/webhook/simulate/:paymentId - Simular aprovação de pagamento (para testes)
+router.post('/webhook/simulate/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    console.log(`🧪 Simulando aprovação do pagamento: ${paymentId}`);
+    
+    // Simular o payload que o Mercado Pago enviaria
+    const simulatedWebhook = {
+      action: 'payment.updated',
+      api_version: 'v1',
+      data: { id: parseInt(paymentId) },
+      date_created: new Date().toISOString(),
+      type: 'payment'
+    };
+    
+    // Processar como se fosse um webhook real
+    const { type, data } = simulatedWebhook;
+    
+    if (type === 'payment' && data?.id) {
+      const paymentStatus = await MercadoPagoService.getPaymentStatus(String(data.id));
+      
+      if (paymentStatus.status === 'approved') {
+        console.log('✅ Pagamento simulado como aprovado!');
+        res.status(200).json({ 
+          success: true, 
+          message: 'Pagamento simulado como aprovado',
+          paymentId: data.id,
+          status: paymentStatus.status
+        });
+      } else {
+        console.log('⚠️ Pagamento ainda não está aprovado no Mercado Pago');
+        res.status(400).json({ 
+          success: false, 
+          message: 'Pagamento ainda não está aprovado',
+          currentStatus: paymentStatus.status
+        });
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro ao simular pagamento:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro ao simular pagamento' 
+    });
+  }
+});
+
+// POST /pagamento/force-approve/:paymentId - FORÇAR APROVAÇÃO (APENAS PARA TESTES)
+router.post('/force-approve/:paymentId', async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    console.log(`🚀 FORÇANDO aprovação do pagamento: ${paymentId}`);
+    
+    // Simular webhook de aprovação
+    const webhookPayload = {
+      action: 'payment.updated',
+      api_version: 'v1',
+      data: { id: parseInt(paymentId) },
+      date_created: new Date().toISOString(),
+      type: 'payment'
+    };
+    
+    // Processar como webhook real
+    const { type, data } = webhookPayload;
+    
+    if (type === 'payment' && data?.id) {
+      // Simular que o pagamento foi aprovado
+      console.log('✅ Pagamento simulado como APROVADO!');
+      
+      res.status(200).json({ 
+        success: true, 
+        message: 'Pagamento FORÇADO como aprovado para teste',
+        paymentId: data.id,
+        status: 'approved',
+        simulated: true
+      });
+    }
+  } catch (error) {
+    console.error('❌ Erro ao forçar aprovação:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Erro ao forçar aprovação' 
+    });
   }
 });
 

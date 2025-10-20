@@ -9,7 +9,7 @@ class UsuarioController {
             const { id } = req.params;
             const usuario = await prisma.usuario.findUnique({
                 where: { id: Number(id) },
-                select: { id: true, nome: true, email: true, role: true },
+                select: { id: true, nome: true, email: true, role: true, mercadoPagoCustomerId: true },
             });
             if (!usuario) {
                 res.status(404).json({ error: 'Usuário não encontrado' });

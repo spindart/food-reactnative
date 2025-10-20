@@ -13,17 +13,44 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Este app precisa acessar sua localização para encontrar endereços próximos e facilitar a entrega.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Este app precisa acessar sua localização para encontrar endereços próximos e facilitar a entrega.",
+        "NSCameraUsageDescription": "Este app precisa acessar sua câmera para tirar fotos do perfil.",
+        "NSPhotoLibraryUsageDescription": "Este app precisa acessar sua galeria para selecionar fotos do perfil."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Este app precisa acessar sua localização para encontrar endereços próximos e facilitar a entrega.",
+          "locationAlwaysPermission": "Este app precisa acessar sua localização para encontrar endereços próximos e facilitar a entrega.",
+          "locationWhenInUsePermission": "Este app precisa acessar sua localização para encontrar endereços próximos e facilitar a entrega.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
+        }
+      ],
+      "expo-asset",
+      "expo-font"
+    ]
   }
 }

@@ -48,9 +48,6 @@ export class CartaoController {
         return;
       }
 
-      // Detectar bandeira do cartão
-      const paymentMethodId = MercadoPagoService.detectCardBrand(cardNumber);
-      
       // Criar ou obter customer no MercadoPago
       let customerId = usuario.mercadoPagoCustomerId;
       if (!customerId) {
@@ -65,10 +62,10 @@ export class CartaoController {
       }
 
       // Adicionar cartão ao customer no MercadoPago
+      // O Mercado Pago detecta automaticamente a bandeira do cartão
       const mercadoPagoCard = await MercadoPagoService.addCardToCustomer(
         customerId!,
-        token,
-        paymentMethodId
+        token
       );
 
       // Extrair dados do cartão
@@ -102,6 +99,9 @@ export class CartaoController {
         where: { usuarioId: parseInt(usuarioId) }
       });
       const isDefault = existingCartoes === 0;
+
+      // Usar a bandeira detectada pelo Mercado Pago
+      const paymentMethodId = mercadoPagoCard.payment_method_id || 'visa';
 
       // Salvar cartão no banco
       const cartao = await prisma.cartao.create({

@@ -5,23 +5,42 @@ const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 class AddressController {
     static async setDefault(req, res) {
-        const user = req.user;
-        if (!user) {
-            res.status(401).json({ error: 'Não autenticado' });
-            return;
+        try {
+            const user = req.user;
+            if (!user) {
+                res.status(401).json({ error: 'Não autenticado' });
+                return;
+            }
+            const { id } = req.params;
+            console.log(`Definindo endereço ${id} como padrão para usuário ${user.id}`);
+            // Verificar se o endereço existe e pertence ao usuário
+            const addressExists = await prisma.address.findFirst({
+                where: {
+                    id: Number(id),
+                    usuarioId: user.id
+                }
+            });
+            if (!addressExists) {
+                res.status(404).json({ error: 'Endereço não encontrado ou não pertence ao usuário' });
+                return;
+            }
+            // Remove isDefault de todos os endereços do usuário
+            await prisma.address.updateMany({
+                where: { usuarioId: user.id },
+                data: { isDefault: false },
+            });
+            // Marca o endereço selecionado como padrão
+            const addr = await prisma.address.update({
+                where: { id: Number(id) },
+                data: { isDefault: true },
+            });
+            console.log('Endereço definido como padrão:', addr);
+            res.json(addr);
         }
-        const { id } = req.params;
-        // Remove isDefault de todos os endereços do usuário
-        await prisma.address.updateMany({
-            where: { usuarioId: user.id },
-            data: { isDefault: false },
-        });
-        // Marca o endereço selecionado como padrão
-        const addr = await prisma.address.update({
-            where: { id: Number(id) },
-            data: { isDefault: true },
-        });
-        res.json(addr);
+        catch (error) {
+            console.error('Erro ao definir endereço padrão:', error);
+            res.status(500).json({ error: 'Erro interno do servidor' });
+        }
     }
     static async list(req, res) {
         const user = req.user;

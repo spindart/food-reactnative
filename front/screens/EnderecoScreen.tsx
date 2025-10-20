@@ -1,30 +1,57 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { getEnderecos, addEndereco, deleteEndereco, updateEndereco, setEnderecoPadrao } from '../services/enderecoService';
-import { useFocusEffect } from '@react-navigation/native';
-// Para autocomplete, instale e use: react-native-google-places-autocomplete
-// import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import AddressInput from '../components/AddressInput';
+import { AddressSuggestion } from '../services/geolocationService';
 
 const EnderecoScreen: React.FC = () => {
+  const navigation = useNavigation();
+  const route = useRoute<any>();
+  const { forSelection = false } = route.params || {};
+  
   const [enderecos, setEnderecos] = useState<any[]>([]);
   const [enderecoPadrao, setEnderecoPadrao] = useState<number | null>(null);
   const [novoEndereco, setNovoEndereco] = useState('');
   const [label, setLabel] = useState('');
-  const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [lat, setLat] = useState<number | null>(null);
   const [lng, setLng] = useState<number | null>(null);
   const [editId, setEditId] = useState<number | null>(null);
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' });
+  const [loadingDefault, setLoadingDefault] = useState<number | null>(null);
 
   const loadEnderecos = useCallback(async () => {
     try {
+      console.log('Carregando endereços...');
       const lista = await getEnderecos();
-      setEnderecos(lista);
-      // Atualiza o endereço padrão ao entrar na tela
-      const padrao = lista.find((e: any) => e.isDefault);
-      setEnderecoPadrao(padrao ? padrao.id : null);
-    } catch (e) {
-      console.log('Erro ao carregar endereços:', e);
+      console.log('Lista carregada:', lista);
+      
+      // Correção automática: se nenhum endereço é padrão, definir o primeiro como padrão
+      const temPadrao = lista.some((e: any) => e.isDefault);
+      if (!temPadrao && lista.length > 0) {
+        console.log('Nenhum endereço padrão encontrado. Definindo o primeiro como padrão automaticamente...');
+        try {
+          await setEnderecoPadrao(lista[0].id);
+          // Recarregar lista após correção
+          const listaCorrigida = await getEnderecos();
+          setEnderecos(listaCorrigida);
+          setEnderecoPadrao(listaCorrigida[0].id);
+          console.log('Endereço padrão corrigido automaticamente');
+        } catch (error) {
+          console.error('Erro ao corrigir endereço padrão automaticamente:', error);
+          setEnderecos(lista);
+          setEnderecoPadrao(null);
+        }
+      } else {
+        setEnderecos(lista);
+        // Atualiza o endereço padrão ao entrar na tela
+        const padrao = lista.find((e: any) => e.isDefault);
+        console.log('Endereço padrão atual:', padrao);
+        setEnderecoPadrao(padrao ? padrao.id : null);
+      }
+    } catch (e: any) {
+      console.error('Erro ao carregar endereços:', e);
+      setSnackbar({ visible: true, message: `Erro ao carregar endereços: ${e.message || 'Erro desconhecido'}`, type: 'error' });
     }
   }, []);
 
@@ -37,6 +64,25 @@ const EnderecoScreen: React.FC = () => {
   useEffect(() => {
     loadEnderecos();
   }, [loadEnderecos]);
+
+  const handleAddressSelect = (address: AddressSuggestion) => {
+    setLat(address.latitude);
+    setLng(address.longitude);
+  };
+
+  const handleSelectAddress = (endereco: any) => {
+    if (forSelection) {
+      // Se veio do checkout, retornar o endereço selecionado via callback
+      console.log('Endereço selecionado:', endereco);
+      if (route.params?.onAddressSelected) {
+        route.params.onAddressSelected(endereco);
+        console.log('Callback executado com sucesso');
+      } else {
+        console.log('Callback não encontrado nos params');
+      }
+      (navigation as any).goBack();
+    }
+  };
 
   const handleSalvar = async () => {
     if (!novoEndereco.trim() || !label.trim()) {
@@ -78,7 +124,17 @@ const EnderecoScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          <Text style={styles.title}>Meus Endereços</Text>
+          <Text style={styles.title}>
+            {forSelection ? 'Selecionar Endereço' : 'Meus Endereços'}
+          </Text>
+          
+          {forSelection && (
+            <View style={styles.selectionInfo}>
+              <Text style={styles.selectionInfoText}>
+                📍 Selecione o endereço para entrega
+              </Text>
+            </View>
+          )}
           
           {enderecos.length > 0 ? (
             <View style={styles.enderecosList}>
@@ -94,68 +150,111 @@ const EnderecoScreen: React.FC = () => {
                   </View>
                   <Text style={styles.address}>{item.address}</Text>
                   <View style={styles.itemActions}>
-                    <TouchableOpacity 
-                      style={[styles.actionButton, item.isDefault && styles.actionButtonDisabled]}
-                      onPress={async () => {
-                        try {
-                          await setEnderecoPadrao(item.id);
-                          // Atualiza lista e endereço padrão
-                          const lista = await getEnderecos();
-                          setEnderecos(lista);
-                          const padrao = lista.find((e: any) => e.isDefault);
-                          setEnderecoPadrao(padrao ? padrao.id : null);
-                          setSnackbar({ visible: true, message: 'Endereço definido como padrão!', type: 'success' });
-                        } catch (e: any) {
-                          setSnackbar({ visible: true, message: `Erro ao definir endereço padrão: ${e.message || 'Erro desconhecido'}`, type: 'error' });
-                        }
-                      }}
-                      disabled={item.isDefault}
-                    >
-                      <Text style={[styles.actionButtonText, item.isDefault && styles.actionButtonTextDisabled]}>
-                        {item.isDefault ? 'Padrão' : 'Definir como padrão'}
-                      </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={styles.actionButton}
-                      onPress={() => {
-                        setEditId(item.id);
-                        setNovoEndereco(item.address);
-                        setLabel(item.label);
-                        setLat(item.latitude);
-                        setLng(item.longitude);
-                      }}
-                    >
-                      <Text style={styles.actionButtonText}>Editar</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                      style={[styles.actionButton, styles.deleteButton]}
-                      onPress={async () => {
-                        Alert.alert(
-                          'Confirmar Exclusão',
-                          'Tem certeza que deseja excluir este endereço?',
-                          [
-                            { text: 'Cancelar', style: 'cancel' },
-                            { 
-                              text: 'Excluir', 
-                              style: 'destructive',
-                              onPress: async () => {
+                    {forSelection ? (
+                      // Modo seleção - apenas botão de selecionar
+                      <TouchableOpacity 
+                        style={[styles.actionButton, styles.selectButton]}
+                        onPress={() => handleSelectAddress(item)}
+                      >
+                        <Text style={styles.selectButtonText}>Selecionar</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      // Modo normal - todos os botões
+                      <>
+                        <TouchableOpacity 
+                          style={[
+                            styles.actionButton, 
+                            item.isDefault && styles.actionButtonDisabled,
+                            loadingDefault === item.id && styles.actionButtonLoading
+                          ]}
+                          onPress={async () => {
+                            try {
+                              console.log('Definindo endereço padrão:', item.id);
+                              setLoadingDefault(item.id);
+                              
+                              // Chamar API primeiro - se não lançar exceção, foi bem-sucedido
+                              await setEnderecoPadrao(item.id);
+                              console.log('Endereço padrão definido com sucesso');
+                              
+                              // Atualizar estado local imediatamente para melhor UX
+                              setEnderecos(prevEnderecos => 
+                                prevEnderecos.map(e => ({
+                                  ...e,
+                                  isDefault: e.id === item.id
+                                }))
+                              );
+                              setEnderecoPadrao(item.id);
+                              
+                              setSnackbar({ visible: true, message: 'Endereço definido como padrão!', type: 'success' });
+                              
+                              // Limpar mensagem de sucesso após 3 segundos
+                              setTimeout(() => setSnackbar({ visible: false, message: '', type: 'success' }), 3000);
+                              
+                            } catch (e: any) {
+                              console.error('Erro ao definir endereço padrão:', e);
+                              setSnackbar({ visible: true, message: `Erro ao definir endereço padrão: ${e.message || 'Erro desconhecido'}`, type: 'error' });
+                              
+                              // Recarregar lista em caso de erro para manter sincronização
+                              setTimeout(async () => {
                                 try {
-                                  await deleteEndereco(item.id);
-                                  setEnderecos(enderecos.filter(e => e.id !== item.id));
-                                  setSnackbar({ visible: true, message: 'Endereço excluído com sucesso!', type: 'success' });
-                                } catch (e: any) {
-                                  setSnackbar({ visible: true, message: `Erro ao excluir endereço: ${e.message || 'Erro desconhecido'}`, type: 'error' });
+                                  await loadEnderecos();
+                                } catch (error) {
+                                  console.error('Erro ao recarregar endereços após falha:', error);
                                 }
-                              }
+                              }, 1000);
+                            } finally {
+                              setLoadingDefault(null);
                             }
-                          ]
-                        );
-                      }}
-                    >
-                      <Text style={styles.deleteButtonText}>Excluir</Text>
-                    </TouchableOpacity>
+                          }}
+                          disabled={item.isDefault || loadingDefault === item.id}
+                        >
+                          <Text style={[styles.actionButtonText, item.isDefault && styles.actionButtonTextDisabled]}>
+                            {loadingDefault === item.id ? 'Definindo...' : (item.isDefault ? 'Padrão' : 'Definir como padrão')}
+                          </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={styles.actionButton}
+                          onPress={() => {
+                            setEditId(item.id);
+                            setNovoEndereco(item.address);
+                            setLabel(item.label);
+                            setLat(item.latitude);
+                            setLng(item.longitude);
+                          }}
+                        >
+                          <Text style={styles.actionButtonText}>Editar</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                          style={[styles.actionButton, styles.deleteButton]}
+                          onPress={async () => {
+                            Alert.alert(
+                              'Confirmar Exclusão',
+                              'Tem certeza que deseja excluir este endereço?',
+                              [
+                                { text: 'Cancelar', style: 'cancel' },
+                                { 
+                                  text: 'Excluir', 
+                                  style: 'destructive',
+                                  onPress: async () => {
+                                    try {
+                                      await deleteEndereco(item.id);
+                                      setEnderecos(enderecos.filter(e => e.id !== item.id));
+                                      setSnackbar({ visible: true, message: 'Endereço excluído com sucesso!', type: 'success' });
+                                    } catch (e: any) {
+                                      setSnackbar({ visible: true, message: `Erro ao excluir endereço: ${e.message || 'Erro desconhecido'}`, type: 'error' });
+                                    }
+                                  }
+                                }
+                              ]
+                            );
+                          }}
+                        >
+                          <Text style={styles.deleteButtonText}>Excluir</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
                   </View>
                 </View>
               ))}
@@ -173,45 +272,17 @@ const EnderecoScreen: React.FC = () => {
               {editId ? 'Editar Endereço' : 'Adicionar Novo Endereço'}
             </Text>
             
-            {/* Autocomplete Nominatim (OpenStreetMap) */}
-            <TextInput
-              style={styles.input}
-              placeholder="Pesquisar endereço"
-              value={novoEndereco}
-              onChangeText={async (text) => {
-                setNovoEndereco(text);
-                if (text.length > 3) {
-                  try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&countrycodes=br&q=${encodeURIComponent(text)}`);
-                    const data = await res.json();
-                    setSugestoes(data);
-                  } catch (e) {
-                    setSugestoes([]);
-                  }
-                } else {
-                  setSugestoes([]);
-                }
-              }}
-            />
+            {/* Botões de teste temporários */}
+        
             
-            {sugestoes.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                {sugestoes.slice(0, 5).map((item: any) => (
-                  <TouchableOpacity 
-                    key={item.place_id} 
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      setNovoEndereco(item.display_name);
-                      setLat(Number(item.lat));
-                      setLng(Number(item.lon));
-                      setSugestoes([]);
-                    }}
-                  >
-                    <Text style={styles.suggestionText}>{item.display_name}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            <AddressInput
+              label="Endereço"
+              placeholder="Digite o endereço completo"
+              value={novoEndereco}
+              onChangeText={setNovoEndereco}
+              onAddressSelect={handleAddressSelect}
+              required
+            />
             
             <TextInput
               style={styles.input}
@@ -246,13 +317,7 @@ const EnderecoScreen: React.FC = () => {
             )}
           </View>
           
-          {enderecoPadrao && (
-            <View style={styles.defaultInfo}>
-              <Text style={styles.defaultInfoText}>
-                ✅ Endereço padrão selecionado para o checkout!
-              </Text>
-            </View>
-          )}
+
         </View>
       </ScrollView>
       
@@ -285,6 +350,21 @@ const styles = StyleSheet.create({
     fontWeight: 'bold', 
     marginBottom: 24,
     color: '#1a1a1a',
+    textAlign: 'center',
+  },
+  selectionInfo: {
+    backgroundColor: '#e8f5e8',
+    borderWidth: 1,
+    borderColor: '#c3e6c3',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  selectionInfoText: {
+    color: '#2d5a2d',
+    fontWeight: '600',
+    fontSize: 16,
     textAlign: 'center',
   },
   enderecosList: {
@@ -349,6 +429,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#e9ecef',
     borderColor: '#dee2e6',
   },
+  actionButtonLoading: {
+    backgroundColor: '#f8f9fa',
+    borderColor: '#e5293e',
+    opacity: 0.7,
+  },
   actionButtonText: {
     color: '#495057',
     fontWeight: '600',
@@ -363,6 +448,15 @@ const styles = StyleSheet.create({
   },
   deleteButtonText: {
     color: '#dc2626',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  selectButton: {
+    backgroundColor: '#e5293e',
+    borderColor: '#e5293e',
+  },
+  selectButtonText: {
+    color: '#fff',
     fontWeight: '600',
     fontSize: 14,
   },
@@ -411,27 +505,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
     backgroundColor: '#fff',
-  },
-  suggestionsContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  suggestionItem: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8f9fa',
-  },
-  suggestionText: {
-    fontSize: 15,
-    color: '#495057',
   },
   button: { 
     backgroundColor: '#e5293e', 

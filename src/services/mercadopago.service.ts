@@ -1,161 +1,285 @@
-// Removido método duplicado fora da classe
+// Serviço MercadoPago - Checkout Transparente conforme documentação oficial
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import axios from 'axios';
 
+// Configuração do cliente MercadoPago
 const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN || '',
 });
 
+// Interfaces para tipagem conforme documentação
+interface CardTokenRequest {
+  card_number: string;
+  expiration_month: number;
+  expiration_year: number;
+  security_code: string;
+  cardholder: {
+    name: string;
+  };
+}
+
+interface SavedCardTokenRequest {
+  card_id: string;
+  security_code: string;
+}
+
+interface PaymentRequest {
+  transaction_amount: number;
+  description: string;
+  payment_method_id: string;
+  payer: {
+    email: string;
+    type?: 'customer';
+    id?: string;
+  };
+  token: string;
+  installments: number;
+  issuer_id?: number;
+  additional_info?: any;
+}
+
+interface CustomerRequest {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+}
+
+interface CustomerUpdateRequest {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+}
+
 export class MercadoPagoService {
-  // Função para detectar bandeira do cartão
+  // Detecção de bandeira do cartão - CONFORME DOCUMENTAÇÃO OFICIAL
   static detectCardBrand(cardNumber: string): string {
     const cleanNumber = cardNumber.replace(/\s/g, '');
     
-    console.log('🔍 Backend detectando bandeira para:', cleanNumber.substring(0, 6) + '****');
-    console.log('🔍 Testando regexes no backend:');
-    console.log('  /^4/:', /^4/.test(cleanNumber));
-    console.log('  /^5[0-5]/:', /^5[0-5]/.test(cleanNumber));
-    console.log('  /^5067/:', /^5067/.test(cleanNumber));
-    console.log('  /^3[47]/:', /^3[47]/.test(cleanNumber));
+    // Validação básica do número do cartão
+    if (!cleanNumber || cleanNumber.length < 13 || cleanNumber.length > 19) {
+      throw new Error('Número do cartão inválido');
+    }
     
+    console.log('🔍 Detectando bandeira para:', cleanNumber.substring(0, 6) + '****');
+    
+    // Detecção baseada nos primeiros dígitos conforme documentação oficial
     if (/^4/.test(cleanNumber)) {
-      console.log('✅ Backend detectado: Visa (começa com 4)');
+      console.log('✅ Detectado: Visa');
       return 'visa';
-    } else if (/^5[0-5]/.test(cleanNumber)) {
-      // Verificar se é Elo ou Mastercard
-      if (/^5067/.test(cleanNumber)) {
-        console.log('✅ Backend detectado: Elo (começa com 5067)');
-        return 'elo';
-      } else {
-        console.log('✅ Backend detectado: Mastercard (começa com 5[0-5])');
-        return 'master';
-      }
+    } else if (/^5[1-5]/.test(cleanNumber)) {
+      console.log('✅ Detectado: Mastercard');
+      return 'master';
+    } else if (/^5067/.test(cleanNumber)) {
+      console.log('✅ Detectado: Elo');
+      return 'elo';
     } else if (/^3[47]/.test(cleanNumber)) {
-      console.log('✅ Backend detectado: American Express (começa com 3[47])');
+      console.log('✅ Detectado: American Express');
       return 'amex';
     } else if (/^6/.test(cleanNumber)) {
-      console.log('✅ Backend detectado: Hipercard (começa com 6)');
+      console.log('✅ Detectado: Hipercard');
       return 'hipercard';
     } else if (/^3[0689]/.test(cleanNumber)) {
-      console.log('✅ Backend detectado: Diners (começa com 3[0689])');
+      console.log('✅ Detectado: Diners Club');
       return 'diners';
     }
     
-    console.log('⚠️ Backend: Bandeira não detectada, usando Visa como padrão');
+    console.log('⚠️ Bandeira não detectada, usando Visa como padrão');
     return 'visa'; // Default fallback
   }
 
+  // Validação de dados do cartão conforme documentação
+  static validateCardData(cardData: {
+    cardNumber: string;
+    cardExp: string;
+    cardCvv: string;
+    cardName: string;
+  }): { isValid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    // Validar número do cartão
+    if (!cardData.cardNumber || cardData.cardNumber.replace(/\s/g, '').length < 13) {
+      errors.push('Número do cartão inválido');
+    }
+    
+    // Validar data de expiração
+    const expParts = cardData.cardExp.split('/');
+    if (expParts.length !== 2) {
+      errors.push('Formato de data inválido. Use MM/AA');
+    } else {
+      const expMonth = parseInt(expParts[0], 10);
+      const expYear = parseInt(expParts[1], 10);
+      
+      if (expMonth < 1 || expMonth > 12) {
+        errors.push('Mês inválido. Use um valor entre 01 e 12');
+      }
+      
+      const currentYear = new Date().getFullYear() % 100;
+      if (expYear < currentYear) {
+        errors.push('Cartão expirado');
+      }
+    }
+    
+    // Validar CVV
+    if (!cardData.cardCvv || cardData.cardCvv.length < 3) {
+      errors.push('CVV inválido');
+    }
+    
+    // Validar nome
+    if (!cardData.cardName || cardData.cardName.trim().length < 2) {
+      errors.push('Nome do portador inválido');
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors
+    };
+  }
+
+  // Gerar token para cartão salvo - CONFORME DOCUMENTAÇÃO OFICIAL
   static async generateSavedCardToken({ cardId, securityCode }: {
     cardId: string;
     securityCode: string;
-  }) {
+  }): Promise<string> {
     try {
-      console.log('Gerando token para cartão salvo:', { 
+      console.log('🔄 Gerando token para cartão salvo:', { 
         cardId: cardId.substring(0, 6) + '****', 
         securityCode: '***' 
       });
 
-      const body = {
+      // Validações básicas
+      if (!cardId || !securityCode) {
+        throw new Error('cardId e securityCode são obrigatórios');
+      }
+
+      if (securityCode.length < 3) {
+        throw new Error('CVV inválido');
+      }
+
+      const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY;
+      if (!MERCADO_PAGO_PUBLIC_KEY) {
+        throw new Error('MERCADO_PAGO_PUBLIC_KEY não configurada');
+      }
+
+      const requestData: SavedCardTokenRequest = {
         card_id: cardId,
         security_code: securityCode
       };
 
-      const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY;
-      if (!MERCADO_PAGO_PUBLIC_KEY) {
-        throw new Error('MERCADO_PAGO_PUBLIC_KEY não encontrada');
+      const response = await axios.post(
+        `https://api.mercadopago.com/v1/card_tokens?public_key=${MERCADO_PAGO_PUBLIC_KEY}`,
+        requestData,
+        {
+          headers: { 
+            'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
+          },
+          timeout: 10000 // 10 segundos de timeout
+        }
+      );
+
+      if (!response.data?.id) {
+        throw new Error('Token não foi gerado pela API do MercadoPago');
       }
 
-      const response = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${MERCADO_PAGO_PUBLIC_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Erro na API MercadoPago (cartão salvo):', errorData);
-        throw new Error(`Erro ao gerar token do cartão salvo: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Token gerado com sucesso para cartão salvo:', data.id);
-      return data.id;
+      console.log('✅ Token gerado com sucesso para cartão salvo:', response.data.id);
+      return response.data.id;
     } catch (error: any) {
-      console.error('Erro ao gerar token do cartão salvo:', error);
+      console.error('❌ Erro ao gerar token do cartão salvo:', error.response?.data || error.message);
+      
+      // Tratamento específico para erros conhecidos
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_card_id')) {
+          throw new Error('Cartão não encontrado ou inválido');
+        } else if (errorData.message?.includes('invalid_security_code')) {
+          throw new Error('Código de segurança inválido');
+        }
+      }
+      
       throw new Error(error.message || 'Erro ao gerar token do cartão salvo');
     }
   }
 
+  // Gerar token para cartão novo - CONFORME DOCUMENTAÇÃO OFICIAL
   static async generateCardToken({ cardNumber, cardExp, cardCvv, cardName }: {
     cardNumber: string;
     cardExp: string;
     cardCvv: string;
     cardName: string;
-  }) {
+  }): Promise<string> {
     try {
-      // Validar e processar data de expiração
-      const expParts = cardExp.split('/');
-      if (expParts.length !== 2) {
-        throw new Error('Formato de data inválido. Use MM/AA');
+      console.log('🔄 Gerando token para cartão novo:', { 
+        cardNumber: cardNumber.substring(0, 4) + '****', 
+        cardExp, 
+        cardName 
+      });
+
+      // Validar dados do cartão usando método interno
+      const validation = this.validateCardData({ cardNumber, cardExp, cardCvv, cardName });
+      if (!validation.isValid) {
+        throw new Error(validation.errors.join(', '));
       }
-      
+
+      // Processar data de expiração
+      const expParts = cardExp.split('/');
       const expMonth = parseInt(expParts[0], 10);
       const expYear = parseInt(expParts[1], 10);
       
-      // Validar mês (1-12)
-      if (expMonth < 1 || expMonth > 12) {
-        throw new Error('Mês inválido. Use um valor entre 01 e 12');
+      const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY;
+      if (!MERCADO_PAGO_PUBLIC_KEY) {
+        throw new Error('MERCADO_PAGO_PUBLIC_KEY não configurada');
       }
-      
-      // Validar ano (deve ser >= ano atual)
-      const currentYear = new Date().getFullYear() % 100; // Últimos 2 dígitos
-      if (expYear < currentYear) {
-        throw new Error('Ano de expiração inválido. Cartão expirado');
-      }
-      
-      const body = {
+
+      const requestData: CardTokenRequest = {
         card_number: cardNumber.replace(/\s/g, ''),
         expiration_month: expMonth,
         expiration_year: 2000 + expYear, // Converter para ano completo
         security_code: cardCvv,
         cardholder: {
-          name: cardName,
+          name: cardName.trim(),
         },
       };
 
-      const MERCADO_PAGO_PUBLIC_KEY = process.env.MERCADO_PAGO_PUBLIC_KEY;
-      if (!MERCADO_PAGO_PUBLIC_KEY) {
-        throw new Error('MERCADO_PAGO_PUBLIC_KEY não encontrada');
+      const response = await axios.post(
+        `https://api.mercadopago.com/v1/card_tokens?public_key=${MERCADO_PAGO_PUBLIC_KEY}`,
+        requestData,
+        {
+          headers: { 
+            'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
+          },
+          timeout: 10000 // 10 segundos de timeout
+        }
+      );
+
+      if (!response.data?.id) {
+        throw new Error('Token não foi gerado pela API do MercadoPago');
       }
 
-      console.log('Gerando token do cartão:', { 
-        cardNumber: cardNumber.substring(0, 4) + '****', 
-        expMonth, 
-        expYear: 2000 + expYear,
-        cardName 
-      });
-
-      const response = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${MERCADO_PAGO_PUBLIC_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Erro na API MercadoPago:', errorData);
-        throw new Error(`Erro ao gerar token do cartão: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('Token gerado com sucesso:', data.id);
-      return data.id;
+      console.log('✅ Token gerado com sucesso:', response.data.id);
+      return response.data.id;
     } catch (error: any) {
-      console.error('Erro ao gerar token do cartão:', error);
+      console.error('❌ Erro ao gerar token do cartão:', error.response?.data || error.message);
+      
+      // Tratamento específico para erros conhecidos
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_card_number')) {
+          throw new Error('Número do cartão inválido');
+        } else if (errorData.message?.includes('invalid_expiration_month')) {
+          throw new Error('Mês de expiração inválido');
+        } else if (errorData.message?.includes('invalid_expiration_year')) {
+          throw new Error('Ano de expiração inválido');
+        } else if (errorData.message?.includes('invalid_security_code')) {
+          throw new Error('Código de segurança inválido');
+        }
+      }
+      
       throw new Error(error.message || 'Erro ao gerar token do cartão');
     }
   }
 
+  // Criar pagamento com cartão - CONFORME DOCUMENTAÇÃO OFICIAL
   static async createCardPayment({ amount, description, payerEmail, token, installments, paymentMethodId, issuerId }: {
     amount: number;
     description: string;
@@ -164,50 +288,108 @@ export class MercadoPagoService {
     installments: number;
     paymentMethodId: string;
     issuerId?: number;
-  }) {
+  }): Promise<{ paymentId: string; status: string; status_detail: string }> {
     try {
-      console.log('Criando pagamento cartão:', { amount, description, payerEmail, paymentMethodId, installments });
+      console.log('🔄 Criando pagamento com cartão:', { 
+        amount, 
+        description, 
+        payerEmail, 
+        paymentMethodId, 
+        installments,
+        issuerId,
+        token: token.substring(0, 10) + '...'
+      });
       
+      // Validações básicas
+      if (!amount || amount <= 0) {
+        throw new Error('Valor do pagamento inválido');
+      }
+      
+      if (!description || !payerEmail || !token || !paymentMethodId) {
+        throw new Error('Dados obrigatórios ausentes');
+      }
+      
+      if (!installments || installments < 1) {
+        throw new Error('Número de parcelas inválido');
+      }
+
+      // Gerar chave de idempotência única
+      const idempotencyKey = `card-payment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const paymentData: PaymentRequest = {
+        transaction_amount: amount,
+        description,
+        payment_method_id: paymentMethodId,
+        payer: {
+          email: payerEmail,
+        },
+        token,
+        installments,
+        issuer_id: issuerId,
+        additional_info: {
+          items: [{
+            id: 'food-order',
+            title: description,
+            description: 'Pedido de comida',
+            quantity: 1,
+            unit_price: amount,
+            category_id: 'food'
+          }]
+        }
+      };
+
       const payment = new Payment(client);
       const result = await payment.create({
-        body: {
-          transaction_amount: amount,
-          description,
-          payment_method_id: paymentMethodId,
-          payer: {
-            email: payerEmail,
-          },
-          token,
-          installments,
-          issuer_id: issuerId,
+        body: paymentData,
+        requestOptions: {
+          idempotencyKey: idempotencyKey,
         },
       });
       
-      console.log('Pagamento cartão criado com sucesso:', result.id);
-      
-      return {
+      console.log('✅ Pagamento com cartão criado:', {
         paymentId: result.id,
         status: result.status,
-        status_detail: result.status_detail,
+        status_detail: result.status_detail
+      });
+      
+      return {
+        paymentId: result.id?.toString() || '',
+        status: result.status || 'unknown',
+        status_detail: result.status_detail || 'unknown',
       };
     } catch (error: any) {
-      console.error('Erro detalhado MercadoPago Cartão:', {
+      console.error('❌ Erro ao criar pagamento com cartão:', {
         message: error.message,
         status: error.status,
         response: error.response?.data,
-        fullError: error,
         paymentMethodId,
         token: token.substring(0, 10) + '...'
       });
       
-      // Tratamento específico para bin_not_found
+      // Tratamento específico para erros conhecidos
       if (error.message === 'bin_not_found') {
         throw new Error('Bandeira do cartão não reconhecida. Verifique o número do cartão ou tente outro cartão.');
       }
       
-      throw new Error(error.message || 'Erro ao criar pagamento com cartão Mercado Pago');
+      if (error.message === 'not_result_by_params') {
+        throw new Error('Parâmetros do pagamento inválidos. Verifique os dados do cartão e tente novamente.');
+      }
+      
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_token')) {
+          throw new Error('Token do cartão inválido ou expirado');
+        } else if (errorData.message?.includes('insufficient_amount')) {
+          throw new Error('Valor insuficiente para o pagamento');
+        } else if (errorData.message?.includes('not_result_by_params')) {
+          throw new Error('Parâmetros do pagamento inválidos. Verifique os dados do cartão e tente novamente.');
+        }
+      }
+      
+      throw new Error(error.message || 'Erro ao criar pagamento com cartão');
     }
   }
+  // Criar pagamento PIX - CONFORME DOCUMENTAÇÃO OFICIAL
   static async createPixPayment({ amount, description, payerEmail, payerFirstName, payerLastName, payerCpf, payerAddress }: { 
     amount: number; 
     description: string; 
@@ -216,10 +398,28 @@ export class MercadoPagoService {
     payerLastName?: string;
     payerCpf?: string;
     payerAddress?: any;
-  }) {
+  }): Promise<{
+    paymentId: string;
+    status: string;
+    status_detail: string;
+    qr_code?: string;
+    qr_code_base64?: string;
+    ticket_url?: string;
+    transaction_id?: string;
+    date_of_expiration?: string;
+  }> {
     try {
-      console.log('Criando pagamento PIX:', { amount, description, payerEmail });
+      console.log('🔄 Criando pagamento PIX:', { amount, description, payerEmail });
       
+      // Validações básicas
+      if (!amount || amount <= 0) {
+        throw new Error('Valor do pagamento inválido');
+      }
+      
+      if (!description || !payerEmail) {
+        throw new Error('Descrição e email do pagador são obrigatórios');
+      }
+
       // Preparar dados do payer conforme documentação oficial
       const payerData: any = {
         email: payerEmail,
@@ -243,31 +443,46 @@ export class MercadoPagoService {
       }
 
       // Gerar chave de idempotência única
-      const idempotencyKey = `pix-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const idempotencyKey = `pix-payment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const paymentData = {
+        transaction_amount: amount,
+        description,
+        payment_method_id: 'pix',
+        payer: payerData,
+        // Data de expiração: 10 minutos (conforme solicitado)
+        date_of_expiration: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        additional_info: {
+          items: [{
+            id: 'food-order',
+            title: description,
+            description: 'Pedido de comida',
+            quantity: 1,
+            unit_price: amount,
+            category_id: 'food'
+          }]
+        }
+      };
 
       const payment = new Payment(client);
       const result = await payment.create({
-        body: {
-          transaction_amount: amount,
-          description,
-          payment_method_id: 'pix',
-          payer: payerData,
-          // Data de expiração padrão: 24 horas (conforme documentação)
-          date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-        },
+        body: paymentData,
         requestOptions: {
           idempotencyKey: idempotencyKey,
         },
       });
       
-      console.log('Pagamento PIX criado com sucesso:', result.id);
-      console.log('QR Code disponível:', !!result.point_of_interaction?.transaction_data?.qr_code);
+      console.log('✅ Pagamento PIX criado:', {
+        paymentId: result.id,
+        status: result.status,
+        qrCodeAvailable: !!result.point_of_interaction?.transaction_data?.qr_code
+      });
       
       // Retorna info PIX conforme documentação oficial
       return {
-        paymentId: result.id,
-        status: result.status,
-        status_detail: result.status_detail,
+        paymentId: result.id?.toString() || '',
+        status: result.status || 'unknown',
+        status_detail: result.status_detail || 'unknown',
         qr_code: result.point_of_interaction?.transaction_data?.qr_code,
         qr_code_base64: result.point_of_interaction?.transaction_data?.qr_code_base64,
         ticket_url: result.point_of_interaction?.transaction_data?.ticket_url,
@@ -275,39 +490,83 @@ export class MercadoPagoService {
         date_of_expiration: result.date_of_expiration,
       };
     } catch (error: any) {
-      console.error('Erro detalhado MercadoPago PIX:', {
+      console.error('❌ Erro ao criar pagamento PIX:', {
         message: error.message,
         status: error.status,
-        response: error.response?.data,
-        fullError: error
+        response: error.response?.data
       });
-      throw new Error(error.message || 'Erro ao criar pagamento PIX Mercado Pago');
+      
+      // Tratamento específico para erros conhecidos
+      if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_email')) {
+          throw new Error('Email do pagador inválido');
+        } else if (errorData.message?.includes('invalid_amount')) {
+          throw new Error('Valor do pagamento inválido');
+        }
+      }
+      
+      throw new Error(error.message || 'Erro ao criar pagamento PIX');
     }
   }
 
-  static async getPaymentStatus(paymentId: string) {
+  // Consultar status do pagamento - CONFORME DOCUMENTAÇÃO OFICIAL
+  static async getPaymentStatus(paymentId: string): Promise<{ status: string; status_detail?: string }> {
     try {
+      if (!paymentId) {
+        throw new Error('ID do pagamento é obrigatório');
+      }
+
+      console.log('🔄 Consultando status do pagamento:', paymentId);
+
       const payment = new Payment(client);
       const result = await payment.get({ id: paymentId });
-      return { status: result.status };
+      
+      console.log('✅ Status do pagamento consultado:', {
+        paymentId: result.id,
+        status: result.status,
+        status_detail: result.status_detail
+      });
+
+      return { 
+        status: result.status || 'unknown',
+        status_detail: result.status_detail 
+      };
     } catch (error: any) {
-      throw new Error(error.message || 'Erro ao consultar status do pagamento Mercado Pago');
+      console.error('❌ Erro ao consultar status do pagamento:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Pagamento não encontrado');
+      }
+      
+      throw new Error(error.message || 'Erro ao consultar status do pagamento');
     }
   }
 
   // Criar customer no MercadoPago - CONFORME DOCUMENTAÇÃO OFICIAL
-  static async createCustomer(email: string): Promise<any> {
+  static async createCustomer(email: string, additionalData?: { first_name?: string; last_name?: string }): Promise<any> {
     try {
       console.log('🔄 Criando customer no MercadoPago:', email);
       
+      if (!email || !email.includes('@')) {
+        throw new Error('Email válido é obrigatório');
+      }
+
+      const customerData: CustomerRequest = {
+        email: email.toLowerCase().trim(),
+        ...additionalData
+      };
+      
       const response = await axios.post(
         'https://api.mercadopago.com/v1/customers',
-        { email },
+        customerData,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -331,12 +590,18 @@ export class MercadoPagoService {
     try {
       console.log('🔄 Buscando customer por email:', email);
       
+      if (!email || !email.includes('@')) {
+        throw new Error('Email válido é obrigatório');
+      }
+      
       const response = await axios.get(
-        `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(email)}`,
+        `https://api.mercadopago.com/v1/customers/search?email=${encodeURIComponent(email.toLowerCase().trim())}`,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -357,12 +622,18 @@ export class MercadoPagoService {
     try {
       console.log('🔄 Buscando customer por ID:', customerId);
       
+      if (!customerId) {
+        throw new Error('ID do customer é obrigatório');
+      }
+      
       const response = await axios.get(
         `https://api.mercadopago.com/v1/customers/${customerId}`,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -370,14 +641,27 @@ export class MercadoPagoService {
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao buscar customer por ID:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Customer não encontrado');
+      }
+      
       throw new Error(`Erro ao buscar customer: ${error.response?.data?.message || error.message}`);
     }
   }
 
   // Modificar customer - CONFORME DOCUMENTAÇÃO OFICIAL
-  static async updateCustomer(customerId: string, updateData: { email?: string; first_name?: string; last_name?: string }): Promise<any> {
+  static async updateCustomer(customerId: string, updateData: CustomerUpdateRequest): Promise<any> {
     try {
       console.log('🔄 Modificando customer:', customerId, updateData);
+      
+      if (!customerId) {
+        throw new Error('ID do customer é obrigatório');
+      }
+
+      if (!updateData || Object.keys(updateData).length === 0) {
+        throw new Error('Dados para atualização são obrigatórios');
+      }
       
       const response = await axios.put(
         `https://api.mercadopago.com/v1/customers/${customerId}`,
@@ -386,7 +670,9 @@ export class MercadoPagoService {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -394,19 +680,27 @@ export class MercadoPagoService {
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao modificar customer:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Customer não encontrado');
+      }
+      
       throw new Error(`Erro ao modificar customer: ${error.response?.data?.message || error.message}`);
     }
   }
 
   // Adicionar cartão ao customer - CONFORME DOCUMENTAÇÃO OFICIAL
-  static async addCardToCustomer(customerId: string, token: string, paymentMethodId?: string): Promise<any> {
+  static async addCardToCustomer(customerId: string, token: string): Promise<any> {
     try {
       console.log('🔄 Adicionando cartão ao customer:', customerId);
       
-      const cardData: any = { token };
-      if (paymentMethodId) {
-        cardData.payment_method_id = paymentMethodId;
+      if (!customerId || !token) {
+        throw new Error('customerId e token são obrigatórios');
       }
+      
+      // Segundo a documentação oficial, apenas o token é necessário
+      // O Mercado Pago detecta automaticamente a bandeira do cartão
+      const cardData = { token };
       
       const response = await axios.post(
         `https://api.mercadopago.com/v1/customers/${customerId}/cards`,
@@ -415,7 +709,9 @@ export class MercadoPagoService {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -423,6 +719,16 @@ export class MercadoPagoService {
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao adicionar cartão ao customer:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Customer não encontrado');
+      } else if (error.response?.status === 400) {
+        const errorData = error.response.data;
+        if (errorData.message?.includes('invalid_token')) {
+          throw new Error('Token do cartão inválido');
+        }
+      }
+      
       throw new Error(`Erro ao adicionar cartão: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -432,19 +738,30 @@ export class MercadoPagoService {
     try {
       console.log('🔄 Listando cartões do customer:', customerId);
       
+      if (!customerId) {
+        throw new Error('ID do customer é obrigatório');
+      }
+      
       const response = await axios.get(
         `https://api.mercadopago.com/v1/customers/${customerId}/cards`,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
       console.log('✅ Cartões obtidos do customer:', response.data.length);
-      return response.data;
+      return response.data || [];
     } catch (error: any) {
       console.error('❌ Erro ao obter cartões do customer:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Customer não encontrado');
+      }
+      
       throw new Error(`Erro ao obter cartões: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -454,12 +771,18 @@ export class MercadoPagoService {
     try {
       console.log('🔄 Removendo cartão do customer:', customerId, cardId);
       
+      if (!customerId || !cardId) {
+        throw new Error('customerId e cardId são obrigatórios');
+      }
+      
       const response = await axios.delete(
         `https://api.mercadopago.com/v1/customers/${customerId}/cards/${cardId}`,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
       
@@ -467,6 +790,11 @@ export class MercadoPagoService {
       return response.data;
     } catch (error: any) {
       console.error('❌ Erro ao remover cartão do customer:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        throw new Error('Customer ou cartão não encontrado');
+      }
+      
       throw new Error(`Erro ao remover cartão: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -481,15 +809,24 @@ export class MercadoPagoService {
     securityCode: string; // CVV fornecido pelo usuário
     installments?: number;
     paymentMethodId?: string;
-  }): Promise<any> {
+  }): Promise<{ paymentId: string; status: string; status_detail: string }> {
     try {
-      console.log('🔍 Criando pagamento com cartão salvo (conforme documentação oficial):', {
+      console.log('🔄 Criando pagamento com cartão salvo:', {
         customerId: paymentData.customerId,
         cardId: paymentData.cardId.substring(0, 6) + '****',
         amount: paymentData.amount
       });
 
-      // Verificar se o customer existe usando o método correto
+      // Validações básicas
+      if (!paymentData.amount || paymentData.amount <= 0) {
+        throw new Error('Valor do pagamento inválido');
+      }
+      
+      if (!paymentData.customerId || !paymentData.cardId || !paymentData.securityCode) {
+        throw new Error('Dados obrigatórios ausentes');
+      }
+
+      // Verificar se o customer existe
       try {
         await this.getCustomerById(paymentData.customerId);
         console.log('✅ Customer encontrado:', paymentData.customerId);
@@ -498,8 +835,8 @@ export class MercadoPagoService {
         throw new Error('Customer não encontrado no MercadoPago');
       }
 
-      // MÉTODO OFICIAL: Gerar token com card_id + security_code conforme documentação
-      console.log('🔄 Gerando token para cartão salvo conforme documentação oficial...');
+      // Gerar token com card_id + security_code conforme documentação oficial
+      console.log('🔄 Gerando token para cartão salvo...');
       
       const tokenResponse = await axios.post(
         'https://api.mercadopago.com/v1/card_tokens',
@@ -511,17 +848,20 @@ export class MercadoPagoService {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 10000
         }
       );
 
       const token = tokenResponse.data.id;
       console.log('✅ Token gerado para cartão salvo:', token);
 
+      // Gerar chave de idempotência única
+      const idempotencyKey = `saved-card-payment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
       // Criar pagamento com token gerado + payer.type: 'customer'
-      console.log('🔄 Criando pagamento com cartão salvo...');
-      
-      const payment = {
+      const paymentDataRequest = {
         transaction_amount: paymentData.amount,
         description: paymentData.description,
         token: token,
@@ -529,33 +869,44 @@ export class MercadoPagoService {
         payer: {
           type: 'customer',
           id: paymentData.customerId
+        },
+        additional_info: {
+          items: [{
+            id: 'food-order',
+            title: paymentData.description,
+            description: 'Pedido de comida',
+            quantity: 1,
+            unit_price: paymentData.amount,
+            category_id: 'food'
+          }]
         }
       };
 
-      console.log('📤 Payload oficial enviado para MercadoPago:', JSON.stringify(payment, null, 2));
+      console.log('📤 Enviando pagamento com cartão salvo...');
 
       const response = await axios.post(
         'https://api.mercadopago.com/v1/payments',
-        payment,
+        paymentDataRequest,
         {
           headers: {
             'Authorization': `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
             'Content-Type': 'application/json',
-            'X-Idempotency-Key': `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            'X-Idempotency-Key': idempotencyKey,
+            'User-Agent': 'FoodApp/1.0'
           },
+          timeout: 15000
         }
       );
 
       console.log('✅ Pagamento criado com cartão salvo:', response.data.id);
       return {
-        paymentId: response.data.id,
-        status: response.data.status,
-        status_detail: response.data.status_detail,
+        paymentId: response.data.id?.toString() || '',
+        status: response.data.status || 'unknown',
+        status_detail: response.data.status_detail || 'unknown',
       };
 
     } catch (error: any) {
       console.error('❌ Erro ao criar pagamento com cartão salvo:', error.response?.data || error.message);
-      console.error('❌ Status:', error.response?.status);
       
       // Tratamento específico para erros conhecidos
       if (error.response?.status === 400) {
@@ -591,7 +942,7 @@ export class MercadoPagoService {
       }
       
       // Adicionar cartão ao customer
-      const card = await this.addCardToCustomer(customer.id, cardToken, paymentMethodId);
+      const card = await this.addCardToCustomer(customer.id, cardToken);
       
       console.log('✅ Customer e cartão criados com sucesso:', { customerId: customer.id, cardId: card.id });
       return { customer, card };

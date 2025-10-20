@@ -32,6 +32,14 @@ app.get('/', (req, res) => {
   res.send('Hello, World!');
 });
 
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 app.use(errorHandler);
 
 const server = http.createServer(app);
