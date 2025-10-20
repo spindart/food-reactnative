@@ -5,6 +5,7 @@ import { createOrder } from '../services/orderService';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
 import { useCart } from '../context/CartContext';
 import { getCurrentUser } from '../services/currentUserService';
+import { getUsuarioById } from '../services/usuarioService';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { iniciarPagamentoPix, consultarStatusPagamento } from '../services/pixService';
 import { createCardPayment, getCardPaymentStatus, generateCardToken, generateSavedCardToken, CardPaymentResponse } from '../services/cardPaymentService';
@@ -22,6 +23,7 @@ const CheckoutScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   const [estabelecimentoId, setEstabelecimentoId] = useState<string | null>(null);
   const [enderecos, setEnderecos] = useState<any[]>([]);
   const [enderecoId, setEnderecoId] = useState<number | null>(null);
@@ -132,11 +134,24 @@ const CheckoutScreen: React.FC = () => {
   const [savedCardCvv, setSavedCardCvv] = useState('');
 
   React.useEffect(() => {
+    // Resetar estados de confirmação ao montar o componente
+    setOrderConfirmed(false);
+    setPaymentProcessing(false);
+    setPaymentMethodSelected(false);
+    
     getCurrentUser().then(async (user) => {
       setUserId(user?.id ? String(user.id) : null);
       
-      // Carregar cartões salvos
+      // Buscar dados completos do usuário
       if (user?.id) {
+        try {
+          const userCompleteData = await getUsuarioById(String(user.id));
+          setUserData(userCompleteData);
+        } catch (error) {
+          console.log('Erro ao carregar dados do usuário:', error);
+        }
+        
+        // Carregar cartões salvos
         try {
           const cartoes = await getCartoes(user.id);
           setCartoesSalvos(cartoes);
@@ -146,6 +161,8 @@ const CheckoutScreen: React.FC = () => {
             const cartaoPadrao = cartoes.find(c => c.isDefault) || cartoes[0];
             setCartaoSelecionado(cartaoPadrao);
             setUsarCartaoSalvo(true);
+            // NÃO definir paymentMethodSelected como true aqui automaticamente
+            // O usuário ainda precisa digitar o CVV para confirmar o uso do cartão salvo
           }
         } catch (error) {
           console.log('Erro ao carregar cartões salvos:', error);
@@ -376,9 +393,10 @@ const CheckoutScreen: React.FC = () => {
       // Definir o novo cartão como selecionado e padrão
       setCartaoSelecionado(response.cartao);
       setUsarCartaoSalvo(true);
+      // Definir paymentMethodSelected como true para permitir confirmação do pedido
       setPaymentMethodSelected(true);
       console.log('✅ Novo cartão definido como padrão:', response.cartao);
-      console.log('✅ paymentMethodSelected definido como true');
+      console.log('✅ Cartão salvo e paymentMethodSelected definido como true');
       
       // Fechar modal e limpar campos
       setShowCardModal(false);
@@ -387,7 +405,7 @@ const CheckoutScreen: React.FC = () => {
       setCardExp('');
       setCardCvv('');
       
-      setSuccess('Cartão salvo e selecionado com sucesso!');
+      setSuccess('Cartão salvo com sucesso! Agora você pode confirmar o pedido.');
       
       // Limpar mensagem de sucesso após 3 segundos
       setTimeout(() => setSuccess(null), 3000);
@@ -412,7 +430,7 @@ const CheckoutScreen: React.FC = () => {
     setSuccess(null);
     setPaymentProcessing(false);
     setOrderConfirmed(false);
-    // NÃO limpar paymentMethodSelected aqui para não interferir no fluxo
+    // NÃO limpar paymentMethodSelected aqui para não interferir no fluxo de cartão salvo
   };
 
   // Função para selecionar método de pagamento
@@ -634,9 +652,9 @@ const CheckoutScreen: React.FC = () => {
         const pixResp = await iniciarPagamentoPix({
           amount: calculateSubtotal() + taxaEntrega,
           description: `Pedido em ${estabelecimentoId}`,
-          payerEmail: 'teste@teste.com', // Email válido para testes
-          payerFirstName: 'Teste',
-          payerLastName: 'Usuario',
+          payerEmail: userData?.email || 'usuario@exemplo.com', // Email do usuário logado
+          payerFirstName: userData?.nome?.split(' ')[0] || 'Usuario', // Primeiro nome do usuário
+          payerLastName: userData?.nome?.split(' ').slice(1).join(' ') || 'Teste', // Sobrenome do usuário
           payerCpf: '19119119100', // CPF válido para testes conforme documentação
           payerAddress: {
             zip_code: '06233200',
@@ -657,6 +675,9 @@ const CheckoutScreen: React.FC = () => {
         startPixTimer();
       } catch (error) {
         setError('Erro ao iniciar pagamento PIX.');
+        setPaymentProcessing(false);
+        setOrderConfirmed(false);
+        setPaymentMethodSelected(false);
       } finally {
         setLoading(false);
       }
@@ -789,7 +810,7 @@ const CheckoutScreen: React.FC = () => {
         const payload = {
           amount: calculateSubtotal() + taxaEntrega,
           description: `Pedido em ${estabelecimentoId}`,
-          payerEmail: 'teste@teste.com', // Email válido para testes
+          payerEmail: userData?.email || 'usuario@exemplo.com', // Email do usuário logado
           token,
           installments: 1, // ou permitir escolha
           paymentMethodId,
@@ -836,15 +857,24 @@ const CheckoutScreen: React.FC = () => {
           }
           if (statusResp.status !== 'approved') {
             setError('Pagamento não aprovado. Tente novamente.');
+            setPaymentProcessing(false);
+            setOrderConfirmed(false);
+            setPaymentMethodSelected(false);
           }
         } else if (cardResp.status === 'approved') {
           await finalizarPedidoAposPagamento(cardPaymentId);
           setSuccess('Pagamento aprovado! Pedido confirmado.');
         } else {
           setError('Pagamento não aprovado.');
+          setPaymentProcessing(false);
+          setOrderConfirmed(false);
+          setPaymentMethodSelected(false);
         }
       } catch (error) {
         setError('Erro ao processar pagamento com cartão.');
+        setPaymentProcessing(false);
+        setOrderConfirmed(false);
+        setPaymentMethodSelected(false);
       } finally {
         setLoading(false);
       }
@@ -940,218 +970,197 @@ const CheckoutScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.sectionTitle}>Endereço de entrega</Text>
-        {enderecos.length > 0 ? (
-          <View>
-            <Text style={{ marginBottom: 6, fontSize: 14, color: '#666' }}>Selecione um endereço salvo:</Text>
-            <View style={{ borderWidth: 1, borderColor: '#e9ecef', borderRadius: 12, marginBottom: 12, backgroundColor: '#fff' }}>
-              <Picker
-                selectedValue={enderecoId}
-                onValueChange={(itemValue, itemIndex) => {
-                  setEnderecoId(itemValue);
-                  const e = enderecos.find((x) => x.id === itemValue);
-                  setEndereco(e ? e.address : '');
-                }}
-                style={{ height: 48 }}
-              >
-                {enderecos.map((e: any) => (
-                  <Picker.Item key={e.id} label={`${e.label}${e.isDefault ? ' (Padrão)' : ''} - ${e.address}`} value={e.id} />
-                ))}
-              </Picker>
-            </View>
-            <TouchableOpacity 
-              style={styles.manageAddressButton}
-              onPress={() => navigation.navigate('Enderecos' as never)}
-            >
-              <Text style={styles.manageAddressButtonText}>Gerenciar Endereços</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={styles.noAddressCard}>
-            <Text style={styles.noAddressIcon}>📍</Text>
-            <Text style={styles.noAddressTitle}>Nenhum endereço salvo</Text>
-            <Text style={styles.noAddressSubtext}>Adicione um endereço para facilitar seus pedidos</Text>
-            <TouchableOpacity 
-              style={styles.addAddressButton}
-              onPress={() => setShowAddressModal(true)}
-            >
-              <Text style={styles.addAddressButtonText}>Adicionar Endereço</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      <Text style={styles.sectionTitle}>Forma de pagamento</Text>
-      <View style={{ flexDirection: 'row', marginBottom: 16 }}>
-        <TouchableOpacity 
-          style={[
-            styles.payButton, 
-            pagamento === 'dinheiro' && pagamento !== null && styles.payButtonSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled,
-            pagamento === 'dinheiro' && !paymentMethodSelected && styles.payButtonWarning
-          ]} 
-          onPress={() => handlePaymentMethodSelect('dinheiro')}
-          disabled={orderConfirmed || paymentProcessing}
-        >
-          <Text style={[
-            styles.payButtonText, 
-            pagamento === 'dinheiro' && pagamento !== null && styles.payButtonTextSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled,
-            pagamento === 'dinheiro' && !paymentMethodSelected && styles.payButtonTextWarning
-          ]}>
-            Pagar na entrega
-            {pagamento === 'dinheiro' && !paymentMethodSelected && ' ⚠️'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[
-            styles.payButton, 
-            pagamento === 'cartao' && pagamento !== null && styles.payButtonSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled
-          ]} 
-          onPress={() => handlePaymentMethodSelect('cartao')}
-          disabled={orderConfirmed || paymentProcessing}
-        >
-          <Text style={[
-            styles.payButtonText, 
-            pagamento === 'cartao' && pagamento !== null && styles.payButtonTextSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled
-          ]}>Cartão</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[
-            styles.payButton, 
-            pagamento === 'pix' && pagamento !== null && styles.payButtonSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonDisabled
-          ]} 
-          onPress={() => handlePaymentMethodSelect('pix')}
-          disabled={orderConfirmed || paymentProcessing}
-        >
-          <Text style={[
-            styles.payButtonText, 
-            pagamento === 'pix' && pagamento !== null && styles.payButtonTextSelected,
-            (orderConfirmed || paymentProcessing) && styles.payButtonTextDisabled
-          ]}>PIX</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.sectionTitle}>Resumo do pedido</Text>
-      {cartItems.length > 0 ? (
-        <FlatList
-          data={cartItems}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.item}>
-              <Text style={styles.name}>{item.nome}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: -1 } })} style={{ marginHorizontal: 4 }}>
-                  <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>-</Text>
-                </TouchableOpacity>
-                <Text style={styles.details}>Qtd: {item.quantidade}</Text>
-                <TouchableOpacity onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: 1 } })} style={{ marginHorizontal: 4 }}>
-                  <Text style={{ fontSize: 18, color: '#e5293e', fontWeight: 'bold' }}>+</Text>
-                </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backButton}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>SACOLA</Text>
+          <TouchableOpacity onPress={() => dispatch({ type: 'CLEAR_CART' })}>
+            <Text style={styles.clearButton}>Limpar</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Endereço de entrega */}
+        <View style={styles.deliverySection}>
+          <Text style={styles.deliveryTitle}>Entregar no endereço</Text>
+          {enderecos.length > 0 ? (
+            <View style={styles.addressCard}>
+              <View style={styles.addressInfo}>
+                <Text style={styles.addressIcon}>📍</Text>
+                <View style={styles.addressDetails}>
+                  <Text style={styles.addressText}>{endereco}</Text>
+                  <Text style={styles.addressLabel}>
+                    {enderecos.find(e => e.id === enderecoId)?.label || 'Endereço'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.details}>R$ {(item.preco * item.quantidade).toFixed(2)}</Text>
-              <TouchableOpacity onPress={() => dispatch({ type: 'REMOVE_ITEM', payload: item.id })} style={{ marginLeft: 12 }}>
-                <Text style={{ color: '#e5293e', fontWeight: 'bold' }}>Remover</Text>
+              <TouchableOpacity 
+                style={styles.changeAddressButton}
+                onPress={() => navigation.navigate('Enderecos' as never)}
+              >
+                <Text style={styles.changeAddressText}>Trocar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.noAddressCard}>
+              <Text style={styles.noAddressIcon}>📍</Text>
+              <Text style={styles.noAddressTitle}>Nenhum endereço salvo</Text>
+              <TouchableOpacity 
+                style={styles.addAddressButton}
+                onPress={() => setShowAddressModal(true)}
+              >
+                <Text style={styles.addAddressButtonText}>Adicionar Endereço</Text>
               </TouchableOpacity>
             </View>
           )}
-          contentContainerStyle={styles.list}
-        />
-      ) : (
-        <View style={styles.emptyOrderSummary}>
-          <Text style={styles.emptyOrderIcon}>📋</Text>
-          <Text style={styles.emptyOrderText}>Nenhum item no pedido</Text>
         </View>
-      )}
-      <View style={styles.resumoRow}>
-        <Text style={styles.resumoLabel}>Subtotal</Text>
-        <Text style={styles.resumoValue}>R$ {calculateSubtotal().toFixed(2)}</Text>
-      </View>
-      <View style={styles.resumoRow}>
-        <Text style={styles.resumoLabel}>Taxa de entrega</Text>
-        <Text style={styles.resumoValue}>R$ {taxaEntrega.toFixed(2)}</Text>
-      </View>
-      <View style={styles.resumoRow}>
-        <Text style={styles.resumoLabelTotal}>Total</Text>
-        <Text style={styles.resumoValueTotal}>R$ {calculateTotal()}</Text>
-      </View>
-      {/* Feedback Messages */}
-      {error && (
-        <View style={styles.feedbackContainer}>
-          <View style={styles.feedbackError}>
-            <Text style={styles.feedbackIcon}>⚠️</Text>
-            <Text style={styles.feedbackErrorText}>{error}</Text>
-          </View>
-        </View>
-      )}
-      {success && (
-        <View style={styles.feedbackContainer}>
-          <View style={styles.feedbackSuccess}>
-            <Text style={styles.feedbackIcon}>✅</Text>
-            <Text style={styles.feedbackSuccessText}>{success}</Text>
-          </View>
-        </View>
-      )}
-      <TouchableOpacity
-        style={[
-          styles.button, 
-          { 
-            backgroundColor: cartItems.length === 0 || !pagamento || !paymentMethodSelected ? '#ccc' : '#e5293e',
-            opacity: (orderConfirmed || paymentProcessing) ? 0.7 : 1
-          }
-        ]}
-        onPress={() => {
-          console.log('🔄 Botão Confirmar Pedido pressionado');
-          console.log('🔄 Estados:', { 
-            loading, 
-            cartItemsLength: cartItems.length, 
-            pagamento, 
-            paymentMethodSelected, 
-            orderConfirmed, 
-            paymentProcessing 
-          });
-          handleConfirmOrder();
-        }}
-        disabled={loading || cartItems.length === 0 || !pagamento || !paymentMethodSelected || orderConfirmed || paymentProcessing}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? 'Processando...' : 
-           orderConfirmed ? 'Pedido Confirmado' : 
-           paymentProcessing ? 'Processando Pagamento...' : 
-           cartItems.length === 0 ? 'Adicione itens ao carrinho' :
-           !pagamento ? 'Selecione uma forma de pagamento' :
-           !paymentMethodSelected ? 'Configure o pagamento' :
-           'Confirmar Pedido'}
-        </Text>
-      </TouchableOpacity>
-      {/* Botão Limpar Carrinho - só aparece antes de confirmar */}
-      {!orderConfirmed && !paymentProcessing && (
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: '#888', marginTop: 8 }]}
-          onPress={() => dispatch({ type: 'CLEAR_CART' })}
-          disabled={cartItems.length === 0}
-        >
-          <Text style={styles.buttonText}>Limpar Carrinho</Text>
-        </TouchableOpacity>
-      )}
-      
-      {cartItems.length === 0 && (
-        <View style={styles.emptyCartContainer}>
-          <View style={styles.emptyCartCard}>
-            <Text style={styles.emptyCartIcon}>🛒</Text>
-            <Text style={styles.emptyCartTitle}>Carrinho Vazio</Text>
-            <Text style={styles.emptyCartSubtext}>
-              Adicione produtos ao seu carrinho para continuar com o pedido
-            </Text>
+
+        {/* Forma de pagamento */}
+        <View style={styles.paymentSection}>
+          <Text style={styles.paymentTitle}>Forma de pagamento</Text>
+          <View style={styles.paymentOptions}>
             <TouchableOpacity 
-              style={styles.emptyCartButton}
-              onPress={() => navigation.navigate('Home' as never)}
+              style={[
+                styles.paymentOption,
+                pagamento === 'dinheiro' && styles.paymentOptionSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionDisabled
+              ]} 
+              onPress={() => handlePaymentMethodSelect('dinheiro')}
+              disabled={orderConfirmed || paymentProcessing}
             >
-              <Text style={styles.emptyCartButtonText}>Ver Produtos</Text>
+              <Text style={[
+                styles.paymentOptionText,
+                pagamento === 'dinheiro' && styles.paymentOptionTextSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionTextDisabled
+              ]}>
+                💵 Pagar na entrega
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.paymentOption,
+                pagamento === 'cartao' && styles.paymentOptionSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionDisabled
+              ]} 
+              onPress={() => handlePaymentMethodSelect('cartao')}
+              disabled={orderConfirmed || paymentProcessing}
+            >
+              <Text style={[
+                styles.paymentOptionText,
+                pagamento === 'cartao' && styles.paymentOptionTextSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionTextDisabled
+              ]}>
+                💳 Cartão
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[
+                styles.paymentOption,
+                pagamento === 'pix' && styles.paymentOptionSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionDisabled
+              ]} 
+              onPress={() => handlePaymentMethodSelect('pix')}
+              disabled={orderConfirmed || paymentProcessing}
+            >
+              <Text style={[
+                styles.paymentOptionText,
+                pagamento === 'pix' && styles.paymentOptionTextSelected,
+                (orderConfirmed || paymentProcessing) && styles.paymentOptionTextDisabled
+              ]}>
+                📱 PIX
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
-      )}
+        {/* Resumo do pedido */}
+        <View style={styles.orderSummarySection}>
+          <Text style={styles.orderSummaryTitle}>Resumo do pedido</Text>
+          {cartItems.length > 0 ? (
+            <View style={styles.orderItemsContainer}>
+              {cartItems.map((item) => (
+                <View key={item.id} style={styles.orderItem}>
+                  <View style={styles.orderItemInfo}>
+                    <Text style={styles.orderItemName}>{item.nome}</Text>
+                    <Text style={styles.orderItemPrice}>R$ {(item.preco * item.quantidade).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.orderItemQuantity}>
+                    <TouchableOpacity 
+                      onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: -1 } })}
+                      style={styles.quantityButton}
+                    >
+                      <Text style={styles.quantityButtonText}>-</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.quantityText}>{item.quantidade}</Text>
+                    <TouchableOpacity 
+                      onPress={() => dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: 1 } })}
+                      style={styles.quantityButton}
+                    >
+                      <Text style={styles.quantityButtonText}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyOrderSummary}>
+              <Text style={styles.emptyOrderIcon}>📋</Text>
+              <Text style={styles.emptyOrderText}>Nenhum item no pedido</Text>
+            </View>
+          )}
+          
+          {/* Totais */}
+          <View style={styles.totalsContainer}>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Subtotal</Text>
+              <Text style={styles.totalValue}>R$ {calculateSubtotal().toFixed(2)}</Text>
+            </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Taxa de entrega</Text>
+              <Text style={styles.totalValue}>R$ {taxaEntrega.toFixed(2)}</Text>
+            </View>
+            <View style={styles.totalRowFinal}>
+              <Text style={styles.totalLabelFinal}>Total</Text>
+              <Text style={styles.totalValueFinal}>R$ {calculateTotal()}</Text>
+            </View>
+          </View>
+        </View>
+        {/* Feedback Messages */}
+        {error && (
+          <View style={styles.feedbackContainer}>
+            <View style={styles.feedbackError}>
+              <Text style={styles.feedbackIcon}>⚠️</Text>
+              <Text style={styles.feedbackErrorText}>{error}</Text>
+            </View>
+          </View>
+        )}
+        {success && (
+          <View style={styles.feedbackContainer}>
+            <View style={styles.feedbackSuccess}>
+              <Text style={styles.feedbackIcon}>✅</Text>
+              <Text style={styles.feedbackSuccessText}>{success}</Text>
+            </View>
+          </View>
+        )}
+        {cartItems.length === 0 && (
+          <View style={styles.emptyCartContainer}>
+            <View style={styles.emptyCartCard}>
+              <Text style={styles.emptyCartIcon}>🛒</Text>
+              <Text style={styles.emptyCartTitle}>Carrinho Vazio</Text>
+              <Text style={styles.emptyCartSubtext}>
+                Adicione produtos ao seu carrinho para continuar com o pedido
+              </Text>
+              <TouchableOpacity 
+                style={styles.emptyCartButton}
+                onPress={() => navigation.navigate('Home' as never)}
+              >
+                <Text style={styles.emptyCartButtonText}>Ver Produtos</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       {paymentResponse && paymentResponse.qr_code_base64 && (
         <View style={styles.pixPaymentContainer}>
           {/* Header com título e timer */}
@@ -1283,6 +1292,9 @@ const CheckoutScreen: React.FC = () => {
               setCardName('');
               setCardExp('');
               setCardCvv('');
+              // Resetar estados de pagamento se cancelar
+              setUsarCartaoSalvo(false);
+              setPaymentMethodSelected(false);
               // Limpar estados de erro para não impedir confirmação
               limparEstadosDeErro();
             }}>
@@ -1368,6 +1380,7 @@ const CheckoutScreen: React.FC = () => {
                 style={[styles.modalButton, styles.modalButtonSecondary]}
                 onPress={() => {
                   setUsarCartaoSalvo(false);
+                  setPaymentMethodSelected(false);
                   setShowCardSelectionModal(false);
                   setShowCardModal(true);
                 }}
@@ -1391,6 +1404,9 @@ const CheckoutScreen: React.FC = () => {
                     setPaymentMethodSelected(true);
                     setShowCardSelectionModal(false);
                     setSuccess('Cartão selecionado com sucesso!');
+                    // Limpar mensagem de erro se existir
+                    setError(null);
+                    setCardError('');
                   }}
                   disabled={!savedCardCvv}
                 >
@@ -1403,6 +1419,12 @@ const CheckoutScreen: React.FC = () => {
             
             <Pressable style={{ marginTop: 8, alignSelf: 'center' }} onPress={() => {
               setShowCardSelectionModal(false);
+              // Se não há CVV digitado, resetar estados de cartão salvo
+              if (!savedCardCvv) {
+                setUsarCartaoSalvo(false);
+                setCartaoSelecionado(null);
+                setPaymentMethodSelected(false);
+              }
               // Limpar estados de erro para não impedir confirmação
               limparEstadosDeErro();
             }}>
@@ -1637,6 +1659,50 @@ const CheckoutScreen: React.FC = () => {
         </View>
       </Modal>
       </ScrollView>
+      
+      {/* Footer fixo com botão principal */}
+      {cartItems.length > 0 && (
+        <View style={styles.footer}>
+          <View style={styles.footerContent}>
+            <View style={styles.footerTotal}>
+              <Text style={styles.footerTotalLabel}>Total com a entrega</Text>
+              <Text style={styles.footerTotalValue}>R$ {calculateTotal()} / {cartItems.length} item{cartItems.length > 1 ? 's' : ''}</Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.mainButton,
+                { 
+                  backgroundColor: cartItems.length === 0 || !pagamento || !paymentMethodSelected ? '#ccc' : '#e5293e',
+                  opacity: (orderConfirmed || paymentProcessing) ? 0.7 : 1
+                }
+              ]}
+              onPress={() => {
+                console.log('🔄 Botão Confirmar Pedido pressionado');
+                console.log('🔄 Estados:', { 
+                  loading, 
+                  cartItemsLength: cartItems.length, 
+                  pagamento, 
+                  paymentMethodSelected, 
+                  orderConfirmed, 
+                  paymentProcessing 
+                });
+                handleConfirmOrder();
+              }}
+              disabled={loading || cartItems.length === 0 || !pagamento || !paymentMethodSelected || orderConfirmed || paymentProcessing}
+            >
+              <Text style={styles.mainButtonText}>
+                {loading ? 'Processando...' : 
+                 orderConfirmed ? 'Pedido Confirmado' : 
+                 paymentProcessing ? 'Processando Pagamento...' : 
+                 cartItems.length === 0 ? 'Adicione itens ao carrinho' :
+                 !pagamento ? 'Selecione uma forma de pagamento' :
+                 !paymentMethodSelected ? 'Configure o pagamento' :
+                 'Continuar'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1650,44 +1716,288 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingBottom: 100, // Espaço para o footer fixo
+  },
+  // Header styles
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    fontSize: 24,
+    color: '#e5293e',
+    fontWeight: 'bold',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  clearButton: {
+    fontSize: 16,
+    color: '#e5293e',
+    fontWeight: '600',
+  },
+  // Delivery section styles
+  deliverySection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  deliveryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  addressCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
     padding: 16,
-    paddingBottom: 32,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
-  list: {
-    marginBottom: 16,
-  },
-  item: {
+  addressInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    marginBottom: 10,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#f1f1f1',
-  },
-  name: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#222',
     flex: 1,
   },
-  details: {
-    fontSize: 15,
+  addressIcon: {
+    fontSize: 16,
+    marginRight: 12,
+  },
+  addressDetails: {
+    flex: 1,
+  },
+  addressText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  addressLabel: {
+    fontSize: 14,
     color: '#666',
-    marginLeft: 8,
   },
-  total: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 18,
+  changeAddressButton: {
+    backgroundColor: 'transparent',
+  },
+  changeAddressText: {
+    fontSize: 16,
     color: '#e5293e',
+    fontWeight: '600',
   },
+  // Payment section styles
+  paymentSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  paymentTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 12,
+  },
+  paymentOptions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  paymentOption: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  paymentOptionSelected: {
+    backgroundColor: '#e5293e',
+    borderColor: '#e5293e',
+  },
+  paymentOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+  },
+  paymentOptionTextSelected: {
+    color: '#fff',
+  },
+  paymentOptionDisabled: {
+    backgroundColor: '#f5f5f5',
+    borderColor: '#ddd',
+    opacity: 0.6,
+  },
+  paymentOptionTextDisabled: {
+    color: '#999',
+  },
+  // Order summary styles
+  orderSummarySection: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    backgroundColor: '#fff',
+  },
+  orderSummaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
+  orderItemsContainer: {
+    marginBottom: 16,
+  },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5',
+  },
+  orderItemInfo: {
+    flex: 1,
+  },
+  orderItemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  orderItemPrice: {
+    fontSize: 14,
+    color: '#e5293e',
+    fontWeight: 'bold',
+  },
+  orderItemQuantity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  quantityButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#e5293e',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  quantityButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quantityText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginHorizontal: 12,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  totalsContainer: {
+    paddingTop: 8,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  totalRowFinal: {
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingTop: 12,
+    marginTop: 8,
+  },
+  totalLabel: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  totalValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '600',
+  },
+  totalLabelFinal: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  totalValueFinal: {
+    fontSize: 18,
+    color: '#e5293e',
+    fontWeight: 'bold',
+  },
+  // Footer styles
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingBottom: 34, // Espaço para a barra de navegação do sistema
+  },
+  footerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 16,
+  },
+  footerTotal: {
+    flex: 1,
+  },
+  footerTotalLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  footerTotalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  mainButton: {
+    backgroundColor: '#e5293e',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    minWidth: 120,
+    alignItems: 'center',
+    shadowColor: '#e5293e',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mainButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Legacy styles - mantidos para compatibilidade com modais
   button: {
     backgroundColor: '#e5293e',
     paddingVertical: 16,
@@ -1707,14 +2017,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 0.5,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 12,
-    marginBottom: 6,
-    color: '#e5293e',
-    marginLeft: 4,
-  },
   input: {
     backgroundColor: '#f6f6f6',
     borderRadius: 12,
@@ -1725,60 +2027,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#eee',
     color: '#222',
-  },
-  payButton: {
-    backgroundColor: '#f6f6f6',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
-  },
-  payButtonSelected: {
-    backgroundColor: '#e5293e',
-    borderColor: '#e5293e',
-  },
-  payButtonText: {
-    color: '#222',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  payButtonTextSelected: {
-    color: '#fff',
-  },
-  payButtonWarning: {
-    backgroundColor: '#fff3cd',
-    borderColor: '#ffc107',
-  },
-  payButtonTextWarning: {
-    color: '#856404',
-  },
-  resumoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-    marginTop: 2,
-    marginHorizontal: 4,
-  },
-  resumoLabel: {
-    color: '#666',
-    fontSize: 15,
-  },
-  resumoValue: {
-    color: '#666',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  resumoLabelTotal: {
-    color: '#e5293e',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  resumoValueTotal: {
-    color: '#e5293e',
-    fontSize: 18,
-    fontWeight: 'bold',
   },
   // Estilos para modal de seleção de cartões
   cartaoOption: {
@@ -2048,110 +2296,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   
-  // Estilos para resumo do pedido melhorado
-  orderSummaryContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  orderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f5f5f5',
-  },
-  orderItemInfo: {
-    flex: 1,
-  },
-  orderItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  orderItemPrice: {
-    fontSize: 14,
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
-  orderItemQuantity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#e5293e',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quantityButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  quantityText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginHorizontal: 12,
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#e9ecef',
-    marginVertical: 12,
-  },
-  totalsContainer: {
-    paddingTop: 8,
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  totalRowFinal: {
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  totalLabel: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-  },
-  totalValue: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '600',
-  },
-  totalLabelFinal: {
-    fontSize: 18,
-    color: '#333',
-    fontWeight: 'bold',
-  },
-  totalValueFinal: {
-    fontSize: 18,
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
   successMessage: {
     backgroundColor: '#d4edda',
     borderRadius: 8,

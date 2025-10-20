@@ -74,7 +74,7 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={require('./screens/EstabelecimentoListScreen').default} options={{ title: 'Início' }} />
       <Tab.Screen name="Pedidos" component={require('./screens/PedidoListScreen').default} />
-      <Tab.Screen name="Carrinho" component={require('./screens/CheckoutScreen').default} />
+      <Tab.Screen name="Carrinho" component={require('./screens/SacolaScreen').default} />
   <Tab.Screen name="Perfil" component={require('./screens/PerfilScreen').default} options={{ title: 'Perfil' }} />
     </Tab.Navigator>
   );
@@ -102,6 +102,10 @@ export default function App() {
           <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
           <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
           <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ title: 'Meus Cartões' }} />
+          {/* Fluxo de Checkout */}
+          <Stack.Screen name="EnderecoEntrega" component={require('./screens/EnderecoEntregaScreen').default} options={{ headerShown: false }} />
+          <Stack.Screen name="FormaPagamento" component={require('./screens/FormaPagamentoScreen').default} options={{ headerShown: false }} />
+          <Stack.Screen name="RevisarPedido" component={require('./screens/RevisarPedidoScreen').default} options={{ headerShown: false }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

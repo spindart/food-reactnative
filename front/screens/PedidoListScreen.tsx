@@ -25,6 +25,8 @@ type Pedido = {
   paymentStatus?: string;
   // Endereço de entrega
   enderecoEntrega?: string;
+  // Taxa de entrega
+  taxaEntrega?: number;
 };
 
 const PedidoListScreen: React.FC = () => {
@@ -112,9 +114,10 @@ const PedidoListScreen: React.FC = () => {
           // Calcular total se não estiver disponível
           let totalPedido = item.total;
           if (!totalPedido && item.itens) {
-            totalPedido = item.itens.reduce((sum: number, itemPedido: any) => {
+            const subtotal = item.itens.reduce((sum: number, itemPedido: any) => {
               return sum + (itemPedido.precoUnitario * itemPedido.quantidade);
             }, 0);
+            totalPedido = subtotal + (item.taxaEntrega || 0);
           }
           
           return (
@@ -175,16 +178,22 @@ const PedidoListScreen: React.FC = () => {
                 )}
                 
                 {/* Forma de pagamento */}
-                {(item.formaPagamentoEntrega || item.paymentMethod) && (
+                {(item.formaPagamento || item.formaPagamentoEntrega || item.paymentMethod) && (
                   <View style={styles.paymentContainer}>
                     <Text style={styles.paymentIcon}>
                       {item.formaPagamentoEntrega ? '💳' : 
+                       item.formaPagamento === 'pix' ? '📱' :
+                       item.formaPagamento === 'cartao' ? '💳' :
+                       item.formaPagamento === 'dinheiro' ? '💵' :
                        item.paymentMethod === 'pix' ? '📱' : '💳'}
                     </Text>
                     <Text style={styles.paymentText}>
                       {item.formaPagamentoEntrega ? 
-                        `Pagamento na entrega: ${item.formaPagamentoEntrega === 'dinheiro' ? 'Dinheiro' : 
-                         item.formaPagamentoEntrega === 'debito' ? 'Cartão de Débito' : 'Cartão de Crédito'}` :
+                        `Pagar na entrega: ${item.formaPagamentoEntrega === 'dinheiro' ? 'Dinheiro' : 
+                         item.formaPagamentoEntrega === 'debito' ? 'Cartão de Débito' : 'Cartão de Crédito'}${item.precisaTroco ? ` (Troco para R$ ${item.trocoParaQuanto?.toFixed(2)})` : ''}` :
+                        item.formaPagamento === 'pix' ? 'PIX' :
+                        item.formaPagamento === 'cartao' ? 'Cartão de Crédito' :
+                        item.formaPagamento === 'dinheiro' ? 'Dinheiro' :
                         item.paymentMethod === 'pix' ? 'PIX' : 
                         item.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : 
                         item.paymentMethod || 'Pagamento online'}
@@ -328,12 +337,12 @@ const PedidoListScreen: React.FC = () => {
                       </View>
                       <View style={styles.totalLine}>
                         <Text style={styles.totalLabel}>Taxa de entrega:</Text>
-                        <Text style={styles.totalValue}>R$ 5,00</Text>
+                        <Text style={styles.totalValue}>R$ {(selectedPedido.taxaEntrega || 0).toFixed(2)}</Text>
                       </View>
                       <View style={[styles.totalLine, styles.totalFinal]}>
                         <Text style={styles.totalFinalLabel}>Total:</Text>
                         <Text style={styles.totalFinalValue}>
-                          R$ {(selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + 5).toFixed(2)}
+                          R$ {(selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + (selectedPedido.taxaEntrega || 0)).toFixed(2)}
                         </Text>
                       </View>
                     </View>

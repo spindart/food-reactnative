@@ -83,6 +83,7 @@ model Pedido {
   paymentId         String?         @unique // ID do pagamento no MercadoPago
   paymentStatus     String?         // Status do pagamento (approved, pending, etc)
   paymentMethod     String?         // Método de pagamento (credit_card, pix, etc)
+  formaPagamento    String?         // Forma de pagamento geral (dinheiro, cartao, pix)
   totalAmount       Float?          // Valor total do pedido
   refundId          String?         @unique // ID do reembolso no MercadoPago
   refundStatus      String?         // Status do reembolso (approved, pending, etc)
@@ -96,6 +97,9 @@ model Pedido {
   
   // Campo para endereço de entrega
   enderecoEntrega      String?      // endereço completo de entrega
+  
+  // Campo para taxa de entrega
+  taxaEntrega         Float?       // taxa de entrega aplicada no pedido
 }
 
 model ItemPedido {

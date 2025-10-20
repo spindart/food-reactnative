@@ -121,12 +121,15 @@ export class PedidoController {
           paymentId: paymentId ? paymentId.toString() : null,
           paymentStatus: paymentStatus || null,
           paymentMethod: paymentMethod || null,
+          formaPagamento: formaPagamento || null,
           // Campos de pagamento na entrega
           formaPagamentoEntrega: formaPagamentoEntrega || null,
           precisaTroco: precisaTroco || null,
           trocoParaQuanto: trocoParaQuanto || null,
           // Campo de endereço de entrega
           enderecoEntrega: enderecoEntrega || null,
+          // Campo de taxa de entrega
+          taxaEntrega: taxaEntrega,
           itens: { create: itensPedido },
         },
         include: { 
