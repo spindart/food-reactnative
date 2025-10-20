@@ -442,8 +442,8 @@ export class MercadoPagoService {
         description,
         payment_method_id: 'pix',
         payer: payerData,
-        // Data de expiração padrão: 24 horas (conforme documentação)
-        date_of_expiration: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        // Data de expiração: 10 minutos (conforme solicitado)
+        date_of_expiration: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         additional_info: {
           items: [{
             id: 'food-order',

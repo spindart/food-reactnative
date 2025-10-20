@@ -4,6 +4,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { createOrder } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
+import { iniciarPagamentoPix } from '../services/pixService';
+import { getUsuarioById } from '../services/usuarioService';
 
 const RevisarPedidoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -12,6 +14,7 @@ const RevisarPedidoScreen: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userData, setUserData] = useState<any>(null);
   
   // Dados vindos das telas anteriores
   const {
@@ -33,9 +36,19 @@ const RevisarPedidoScreen: React.FC = () => {
   const cartItems = cartState.items;
 
   useEffect(() => {
-    // Carregar userId
-    getCurrentUser().then((user) => {
+    // Carregar userId e dados do usuário
+    getCurrentUser().then(async (user) => {
       setUserId(user?.id ? String(user.id) : null);
+      
+      // Buscar dados completos do usuário
+      if (user?.id) {
+        try {
+          const userCompleteData = await getUsuarioById(String(user.id));
+          setUserData(userCompleteData);
+        } catch (error) {
+          console.log('Erro ao carregar dados do usuário:', error);
+        }
+      }
     });
   }, []);
 
@@ -82,7 +95,41 @@ const RevisarPedidoScreen: React.FC = () => {
         return;
       }
 
-      // Preparar payload do pedido
+      // Se for PIX, iniciar pagamento sem criar pedido
+      if (formaPagamento === 'pix') {
+        const pixResp = await iniciarPagamentoPix({
+          amount: calculateTotal(),
+          description: `Pedido em ${estabelecimentoId}`,
+          payerEmail: userData?.email || 'usuario@exemplo.com',
+          payerFirstName: userData?.nome?.split(' ')[0] || 'Usuario',
+          payerLastName: userData?.nome?.split(' ').slice(1).join(' ') || 'Teste',
+          payerCpf: '19119119100', // CPF válido para testes conforme documentação
+          payerAddress: {
+            zip_code: '06233200',
+            street_name: 'Av. das Nações Unidas',
+            street_number: '3003',
+            neighborhood: 'Bonfim',
+            city: 'Osasco',
+            federal_unit: 'SP'
+          },
+        });
+        
+        // Navegar para tela de confirmação PIX
+        (navigation as any).navigate('PixPaymentConfirmation', {
+          pixData: pixResp,
+          orderData: {
+            userId,
+            estabelecimentoId,
+            cartItems,
+            total: calculateTotal(),
+            endereco: endereco?.address || endereco,
+            taxaEntrega: opcaoEntrega === 'retirada' ? 0 : (route.params?.taxaEntrega || 0)
+          }
+        });
+        return;
+      }
+
+      // Para outros métodos de pagamento, criar pedido diretamente
       const payload = {
         clienteId: Number(userId),
         estabelecimentoId: Number(estabelecimentoId),

@@ -16,6 +16,7 @@ import ProdutosDoEstabelecimentoScreen from './screens/ProdutosDoEstabelecimento
 import EditarProdutoScreen from './screens/EditarProdutoScreen';
 import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoScreen';
 import MeusCartoesScreen from './screens/MeusCartoesScreen';
+import PixPaymentConfirmationScreen from './screens/PixPaymentConfirmationScreen';
 import * as Notifications from 'expo-notifications';
 import { CartProvider, useCart } from './context/CartContext';
 
@@ -106,6 +107,7 @@ export default function App() {
           <Stack.Screen name="EnderecoEntrega" component={require('./screens/EnderecoEntregaScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="FormaPagamento" component={require('./screens/FormaPagamentoScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="RevisarPedido" component={require('./screens/RevisarPedidoScreen').default} options={{ headerShown: false }} />
+          <Stack.Screen name="PixPaymentConfirmation" component={PixPaymentConfirmationScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

@@ -7,3 +7,4 @@ test-detection.js
 test-fluxo-completo.sh
 test-mastercard-debug.js
 test-mastercard-especifico.sh
+MERCADOPAGO_INTEGRATION.md
