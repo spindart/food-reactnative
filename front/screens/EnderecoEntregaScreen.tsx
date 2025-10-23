@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { getEnderecos, addEndereco } from '../services/enderecoService';
 import { useCart } from '../context/CartContext';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
 
 const EnderecoEntregaScreen: React.FC = () => {
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const { state: cartState } = useCart();
   const [enderecos, setEnderecos] = useState<any[]>([]);
   const [enderecoSelecionado, setEnderecoSelecionado] = useState<any>(null);
@@ -113,7 +114,7 @@ const EnderecoEntregaScreen: React.FC = () => {
     }
     
     // Passar dados para próxima tela
-    navigation.navigate('FormaPagamento' as never, {
+    (navigation as any).navigate('FormaPagamento', {
       endereco: enderecoSelecionado,
       opcaoEntrega: opcaoEntrega,
       taxaEntrega: taxaEntrega
@@ -149,7 +150,13 @@ const EnderecoEntregaScreen: React.FC = () => {
               </View>
               <TouchableOpacity 
                 style={styles.changeAddressButton}
-                onPress={() => navigation.navigate('Enderecos' as never)}
+                onPress={() => (navigation as any).navigate('Enderecos', { 
+                  forSelection: true,
+                  onAddressSelected: (selectedAddress: any) => {
+                    console.log('Callback executado - endereço selecionado:', selectedAddress);
+                    setEnderecoSelecionado(selectedAddress);
+                  }
+                })}
               >
                 <Text style={styles.changeAddressText}>Trocar</Text>
               </TouchableOpacity>

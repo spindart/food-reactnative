@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export class EstabelecimentoController {
   static async create(req: Request, res: Response): Promise<void> {
     try {
-  const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem } = req.body;
       // Pega o id do usuário autenticado (dono)
       const user = (req as any).user;
       if (!user || user.role !== 'dono') {
@@ -32,6 +32,8 @@ export class EstabelecimentoController {
           nome,
           descricao,
           endereco,
+          latitude,
+          longitude,
           donoId: user.id,
           tempoEntregaMin: tempoEntregaMin ?? 30,
           tempoEntregaMax: tempoEntregaMax ?? 50,
@@ -52,7 +54,7 @@ export class EstabelecimentoController {
   static async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { nome, descricao, endereco, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
       if (categorias && categorias.length > 3) {
         res.status(400).json({ error: 'Selecione no máximo 3 categorias.' });
         return;
@@ -73,6 +75,8 @@ export class EstabelecimentoController {
           nome,
           descricao,
           endereco,
+          latitude,
+          longitude,
           tempoEntregaMin,
           tempoEntregaMax,
           taxaEntrega,

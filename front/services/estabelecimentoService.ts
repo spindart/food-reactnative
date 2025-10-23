@@ -1,11 +1,13 @@
 import api from './api';
 import type { Categoria } from './categoriaService';
 
-type Estabelecimento = {
+export type Estabelecimento = {
   id?: string;
   nome: string;
   descricao: string;
   endereco: string;
+  latitude?: number | null;
+  longitude?: number | null;
   tempoEntregaMin?: number;
   tempoEntregaMax?: number;
   taxaEntrega?: number;

@@ -1,7 +1,7 @@
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
-  Home: undefined;
+  HomeTabs: { screen?: 'Home' | 'Pedidos' | 'Carrinho' | 'Perfil' };
   ProductDetail: {
     nome: string;
     preco: number;
@@ -10,4 +10,15 @@ export type RootStackParamList = {
   ProdutosDoEstabelecimento: { estabelecimento: { id: string; nome: string; descricao: string; endereco: string } };
   Enderecos: undefined;
   Perfil: undefined;
+  MeusCartoes: undefined;
+  DonoDashboard: undefined;
+  CadastrarEstabelecimento: undefined;
+  EditarEstabelecimento: undefined;
+  CadastrarProduto: undefined;
+  EditarProduto: undefined;
+  PedidosDoEstabelecimento: undefined;
+  EnderecoEntrega: undefined;
+  FormaPagamento: undefined;
+  RevisarPedido: undefined;
+  PixPaymentConfirmation: undefined;
 };

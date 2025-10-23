@@ -41,8 +41,6 @@ class CartaoController {
                 res.status(404).json({ error: 'Usuário não encontrado' });
                 return;
             }
-            // Detectar bandeira do cartão
-            const paymentMethodId = mercadopago_service_1.MercadoPagoService.detectCardBrand(cardNumber);
             // Criar ou obter customer no MercadoPago
             let customerId = usuario.mercadoPagoCustomerId;
             if (!customerId) {
@@ -55,7 +53,8 @@ class CartaoController {
                 });
             }
             // Adicionar cartão ao customer no MercadoPago
-            const mercadoPagoCard = await mercadopago_service_1.MercadoPagoService.addCardToCustomer(customerId, token, paymentMethodId);
+            // O Mercado Pago detecta automaticamente a bandeira do cartão
+            const mercadoPagoCard = await mercadopago_service_1.MercadoPagoService.addCardToCustomer(customerId, token);
             // Extrair dados do cartão
             const cleanCardNumber = cardNumber.replace(/\s/g, '');
             const lastFourDigits = cleanCardNumber.slice(-4);
@@ -63,11 +62,28 @@ class CartaoController {
             const expParts = cardExp.split('/');
             const expirationMonth = parseInt(expParts[0], 10);
             const expirationYear = parseInt(expParts[1], 10) + 2000; // Converter para ano completo
+            // Verificar se o cartão já existe (por mercadoPagoCardId)
+            const cartaoExistente = await prisma.cartao.findFirst({
+                where: {
+                    mercadoPagoCardId: mercadoPagoCard.id,
+                    usuarioId: parseInt(usuarioId)
+                }
+            });
+            if (cartaoExistente) {
+                console.log('⚠️ CartaoController - Cartão já existe:', cartaoExistente);
+                res.status(400).json({
+                    error: 'Este cartão já está cadastrado',
+                    cartao: cartaoExistente
+                });
+                return;
+            }
             // Verificar se é o primeiro cartão (será o padrão)
             const existingCartoes = await prisma.cartao.count({
                 where: { usuarioId: parseInt(usuarioId) }
             });
             const isDefault = existingCartoes === 0;
+            // Usar a bandeira detectada pelo Mercado Pago
+            const paymentMethodId = mercadoPagoCard.payment_method_id || 'visa';
             // Salvar cartão no banco
             const cartao = await prisma.cartao.create({
                 data: {
@@ -105,16 +121,41 @@ class CartaoController {
                 res.status(400).json({ error: 'ID do cartão e usuário são obrigatórios' });
                 return;
             }
+            // Verificar se o cartão existe e pertence ao usuário
+            const cartaoExistente = await prisma.cartao.findFirst({
+                where: {
+                    id: parseInt(cartaoId),
+                    usuarioId: parseInt(usuarioId)
+                }
+            });
+            if (!cartaoExistente) {
+                res.status(404).json({ error: 'Cartão não encontrado ou não pertence ao usuário' });
+                return;
+            }
             // Remover padrão de todos os cartões do usuário
-            await prisma.cartao.updateMany({
+            const updateManyResult = await prisma.cartao.updateMany({
                 where: { usuarioId: parseInt(usuarioId) },
                 data: { isDefault: false }
             });
+            // console.log('✅ CartaoController - Resultado updateMany:', updateManyResult);
+            // console.log('✅ CartaoController - Cartões atualizados:', updateManyResult.count);
+            // console.log('🔄 CartaoController - Definindo novo cartão como padrão:', cartaoId);
             // Definir novo cartão como padrão
             const cartao = await prisma.cartao.update({
                 where: { id: parseInt(cartaoId) },
                 data: { isDefault: true }
             });
+            // console.log('✅ CartaoController - Cartão definido como padrão com sucesso:', cartao);
+            // Verificar se realmente foi salvo no banco
+            const cartaoVerificacao = await prisma.cartao.findUnique({
+                where: { id: parseInt(cartaoId) }
+            });
+            // console.log('🔍 CartaoController - Verificação no banco:', cartaoVerificacao);
+            // Verificar todos os cartões do usuário após a atualização
+            const todosCartoes = await prisma.cartao.findMany({
+                where: { usuarioId: parseInt(usuarioId) }
+            });
+            // console.log('🔍 CartaoController - Todos os cartões após atualização:', todosCartoes);
             res.status(200).json({
                 success: true,
                 cartao,

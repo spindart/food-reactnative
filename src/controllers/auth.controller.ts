@@ -38,7 +38,12 @@ export class AuthController {
         res.status(401).json({ error: 'Credenciais inválidas' });
         return;
       }
-      const token = jwt.sign({ id: usuario.id, role: usuario.role }, JWT_SECRET, { expiresIn: '1d' });
+      const token = jwt.sign({ 
+        id: usuario.id, 
+        nome: usuario.nome,
+        email: usuario.email,
+        role: usuario.role 
+      }, JWT_SECRET, { expiresIn: '1d' });
       res.json({ token });
     } catch (error) {
       res.status(400).json({ error: 'Erro ao autenticar', details: error });

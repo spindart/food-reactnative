@@ -252,17 +252,55 @@ export class PedidoController {
   static async listByCliente(req: Request, res: Response): Promise<void> {
     try {
       const { clienteId } = req.params;
+      console.log('🔍 Buscando pedidos para cliente ID:', clienteId);
+      
+      
       const pedidos = await prisma.pedido.findMany({
         where: { clienteId: Number(clienteId) },
         include: {
-          itens: { include: { produto: true } },
-          estabelecimento: { select: { nome: true } },
+          itens: { 
+            include: { 
+              produto: {
+                select: {
+                  id: true,
+                  nome: true,
+                  preco: true,
+                  imagem: true
+                }
+              } 
+            } 
+          },
+          estabelecimento: { 
+            select: { 
+              id: true,
+              nome: true,
+              imagem: true
+            } 
+          },
         },
+        orderBy: {
+          createdAt: 'desc'
+        }
       });
-      console.log('Pedidos retornados pelo Prisma:', JSON.stringify(pedidos, null, 2));
+      
+      console.log('✅ Pedidos encontrados:', pedidos.length);
+      console.log('📊 Primeiro pedido (exemplo):', pedidos[0] ? JSON.stringify(pedidos[0], null, 2) : 'Nenhum pedido');
+      
       res.json(pedidos);
-    } catch (error) {
-      res.status(500).json({ error: 'Erro ao buscar pedidos do cliente', details: error });
+    } catch (error: any) {
+      console.error('❌ Erro detalhado ao buscar pedidos:', error);
+      console.error('❌ Mensagem:', error.message);
+      console.error('❌ Código:', error.code);
+      console.error('❌ Meta:', error.meta);
+      
+      res.status(500).json({ 
+        error: 'Erro ao buscar pedidos do cliente', 
+        details: {
+          message: error.message,
+          code: error.code,
+          meta: error.meta
+        }
+      });
     }
   }
 

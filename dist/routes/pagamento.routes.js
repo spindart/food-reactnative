@@ -5,19 +5,35 @@ const mercadopago_service_1 = require("../services/mercadopago.service");
 const router = (0, express_1.Router)();
 // POST /pagamento/pix
 router.post('/pix', async function (req, res) {
-    const { amount, description, payerEmail } = req.body;
-    console.log('Recebido /pagamento/pix:', { amount, description, payerEmail });
+    const { amount, description, payerEmail, pedidoId, payerFirstName, payerLastName, payerCpf, payerAddress } = req.body;
+    console.log('Recebido /pagamento/pix:', { amount, description, payerEmail, pedidoId, payerFirstName, payerLastName, payerCpf });
     if (!amount || !description || !payerEmail) {
         return res.status(400).json({ error: 'amount, description e payerEmail são obrigatórios' });
     }
     try {
-        const pix = await mercadopago_service_1.MercadoPagoService.createPixPayment({ amount, description, payerEmail });
+        const pix = await mercadopago_service_1.MercadoPagoService.createPixPayment({
+            amount,
+            description,
+            payerEmail,
+            payerFirstName,
+            payerLastName,
+            payerCpf,
+            payerAddress
+        });
+        // Pedido será criado após pagamento aprovado no frontend
+        // Não salvar informações de pagamento aqui pois o pedido ainda não existe
         return res.status(200).json(pix);
     }
     catch (error) {
-        console.error('Erro no endpoint PIX:', error);
+        console.error('❌ Erro no endpoint PIX:', error);
+        console.error('❌ Stack trace:', error.stack);
+        console.error('❌ Error details:', {
+            message: error.message,
+            status: error.status,
+            response: error.response?.data
+        });
         return res.status(500).json({
-            error: error.message,
+            error: error.message || 'Erro interno do servidor',
             details: error.message.includes('forbidden') ? 'Email do pagador não autorizado. Verifique as credenciais do MercadoPago.' : error.message
         });
     }
@@ -25,7 +41,7 @@ router.post('/pix', async function (req, res) {
 // POST /pagamento/cartao
 router.post('/cartao', async function (req, res) {
     console.log('Recebido /pagamento/cartao:', req.body);
-    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode } = req.body;
+    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId } = req.body;
     if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
         return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
     }
@@ -76,6 +92,8 @@ router.post('/cartao', async function (req, res) {
                 issuerId
             });
         }
+        // Pedido será criado após pagamento aprovado no frontend
+        // Não salvar informações de pagamento aqui pois o pedido ainda não existe
         return res.status(200).json(payment);
     }
     catch (error) {
@@ -135,6 +153,134 @@ router.get('/mercadopago/status/:id', async function (req, res) {
     }
     catch (error) {
         return res.status(500).json({ error: error.message });
+    }
+});
+// POST /pagamento/webhook/mercadopago - Webhook do Mercado Pago
+router.post('/webhook/mercadopago', async (req, res) => {
+    try {
+        console.log('🔔 Webhook recebido:', req.body);
+        const { type, data } = req.body;
+        // Verificar se é uma notificação de pagamento
+        if (type === 'payment' && data?.id) {
+            const paymentId = data.id;
+            console.log(`💰 Verificando pagamento: ${paymentId}`);
+            // Buscar status atual do pagamento
+            const paymentStatus = await mercadopago_service_1.MercadoPagoService.getPaymentStatus(paymentId);
+            console.log(`📊 Status do pagamento ${paymentId}:`, paymentStatus);
+            if (paymentStatus.status === 'approved') {
+                console.log('✅ Pagamento aprovado! Processando...');
+                // Aqui você pode:
+                // 1. Atualizar o pedido no banco de dados
+                // 2. Enviar email de confirmação
+                // 3. Notificar o frontend via WebSocket
+                // 4. Processar outras ações pós-pagamento
+                res.status(200).json({
+                    success: true,
+                    message: 'Webhook processado com sucesso',
+                    paymentId,
+                    status: paymentStatus.status
+                });
+            }
+            else {
+                console.log(`⏳ Pagamento ainda pendente: ${paymentStatus.status}`);
+                res.status(200).json({
+                    success: true,
+                    message: 'Webhook recebido, pagamento pendente',
+                    paymentId,
+                    status: paymentStatus.status
+                });
+            }
+        }
+        else {
+            console.log('❓ Tipo de webhook não reconhecido:', type);
+            res.status(200).json({ success: true, message: 'Webhook recebido' });
+        }
+    }
+    catch (error) {
+        console.error('❌ Erro ao processar webhook:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro interno do servidor'
+        });
+    }
+});
+// POST /pagamento/webhook/simulate/:paymentId - Simular aprovação de pagamento (para testes)
+router.post('/webhook/simulate/:paymentId', async (req, res) => {
+    try {
+        const { paymentId } = req.params;
+        console.log(`🧪 Simulando aprovação do pagamento: ${paymentId}`);
+        // Simular o payload que o Mercado Pago enviaria
+        const simulatedWebhook = {
+            action: 'payment.updated',
+            api_version: 'v1',
+            data: { id: parseInt(paymentId) },
+            date_created: new Date().toISOString(),
+            type: 'payment'
+        };
+        // Processar como se fosse um webhook real
+        const { type, data } = simulatedWebhook;
+        if (type === 'payment' && data?.id) {
+            const paymentStatus = await mercadopago_service_1.MercadoPagoService.getPaymentStatus(String(data.id));
+            if (paymentStatus.status === 'approved') {
+                console.log('✅ Pagamento simulado como aprovado!');
+                res.status(200).json({
+                    success: true,
+                    message: 'Pagamento simulado como aprovado',
+                    paymentId: data.id,
+                    status: paymentStatus.status
+                });
+            }
+            else {
+                console.log('⚠️ Pagamento ainda não está aprovado no Mercado Pago');
+                res.status(400).json({
+                    success: false,
+                    message: 'Pagamento ainda não está aprovado',
+                    currentStatus: paymentStatus.status
+                });
+            }
+        }
+    }
+    catch (error) {
+        console.error('❌ Erro ao simular pagamento:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao simular pagamento'
+        });
+    }
+});
+// POST /pagamento/force-approve/:paymentId - FORÇAR APROVAÇÃO (APENAS PARA TESTES)
+router.post('/force-approve/:paymentId', async (req, res) => {
+    try {
+        const { paymentId } = req.params;
+        console.log(`🚀 FORÇANDO aprovação do pagamento: ${paymentId}`);
+        // Simular webhook de aprovação
+        const webhookPayload = {
+            action: 'payment.updated',
+            api_version: 'v1',
+            data: { id: parseInt(paymentId) },
+            date_created: new Date().toISOString(),
+            type: 'payment'
+        };
+        // Processar como webhook real
+        const { type, data } = webhookPayload;
+        if (type === 'payment' && data?.id) {
+            // Simular que o pagamento foi aprovado
+            console.log('✅ Pagamento simulado como APROVADO!');
+            res.status(200).json({
+                success: true,
+                message: 'Pagamento FORÇADO como aprovado para teste',
+                paymentId: data.id,
+                status: 'approved',
+                simulated: true
+            });
+        }
+    }
+    catch (error) {
+        console.error('❌ Erro ao forçar aprovação:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao forçar aprovação'
+        });
     }
 });
 exports.default = router;

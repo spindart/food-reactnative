@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { updateEstabelecimento } from '../services/estabelecimentoService';
+import { updateEstabelecimento, Estabelecimento } from '../services/estabelecimentoService';
 import { Snackbar } from 'react-native-paper';
 import { getCategorias, Categoria } from '../services/categoriaService';
+import AddressInput from '../components/AddressInput';
+import { AddressSuggestion } from '../services/geolocationService';
 
 const EditarEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -12,6 +14,8 @@ const EditarEstabelecimentoScreen: React.FC = () => {
   const [nome, setNome] = useState(estabelecimento.nome);
   const [descricao, setDescricao] = useState(estabelecimento.descricao);
   const [endereco, setEndereco] = useState(estabelecimento.endereco);
+  const [latitude, setLatitude] = useState<number | null>(estabelecimento.latitude);
+  const [longitude, setLongitude] = useState<number | null>(estabelecimento.longitude);
   const [tempoEntregaMin, setTempoEntregaMin] = useState(estabelecimento.tempoEntregaMin?.toString() || '30');
   const [tempoEntregaMax, setTempoEntregaMax] = useState(estabelecimento.tempoEntregaMax?.toString() || '50');
   const [taxaEntrega, setTaxaEntrega] = useState(estabelecimento.taxaEntrega?.toString() || '5.00');
@@ -32,6 +36,11 @@ const EditarEstabelecimentoScreen: React.FC = () => {
     });
   };
 
+  const handleAddressSelect = (address: AddressSuggestion) => {
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
+  };
+
   const handleSubmit = async () => {
     if (!nome || !descricao || !endereco) {
       setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
@@ -47,6 +56,8 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         nome,
         descricao,
         endereco,
+        latitude,
+        longitude,
         tempoEntregaMin: Number(tempoEntregaMin),
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
@@ -86,11 +97,13 @@ const EditarEstabelecimentoScreen: React.FC = () => {
           value={descricao}
           onChangeText={setDescricao}
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Endereço"
+        <AddressInput
+          label="Endereço do Estabelecimento"
+          placeholder="Digite o endereço do estabelecimento"
           value={endereco}
           onChangeText={setEndereco}
+          onAddressSelect={handleAddressSelect}
+          required
         />
         <TextInput
           style={styles.input}

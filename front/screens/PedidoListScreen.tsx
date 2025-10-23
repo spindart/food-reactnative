@@ -39,20 +39,56 @@ const PedidoListScreen: React.FC = () => {
 
   const fetchPedidos = async () => {
     try {
+      console.log('🔄 Iniciando busca de pedidos...');
+      setLoading(true);
+      setError(null);
+      
       const user = await getCurrentUser();
+      console.log('👤 Usuário atual:', user);
+      
       if (!user?.id) {
+        console.log('❌ Usuário não autenticado');
         setError('Usuário não autenticado.');
         setLoading(false);
         return;
       }
+      
+      console.log('📡 Fazendo requisição para API...');
+      console.log('🔗 URL:', `/pedidos/cliente/${user.id}`);
+      
       const response = await api.get(`/pedidos/cliente/${user.id}`);
-      console.log('Resposta pedidos:', JSON.stringify(response.data, null, 2));
+      console.log('✅ Resposta recebida:', response.status);
+      console.log('📊 Dados dos pedidos:', JSON.stringify(response.data, null, 2));
+      
       // Separa pedidos em atuais e históricos
       const pedidosAtuais = response.data.filter((p: any) => p.status !== 'entregue' && p.status !== 'cancelado');
       const pedidosHistorico = response.data.filter((p: any) => p.status === 'entregue' || p.status === 'cancelado');
+      
+      console.log('📋 Pedidos atuais:', pedidosAtuais.length);
+      console.log('📋 Pedidos históricos:', pedidosHistorico.length);
+      
       setPedidos([...pedidosAtuais, ...pedidosHistorico]);
-    } catch (err) {
-      setError('Erro ao carregar os pedidos.');
+      console.log('✅ Pedidos carregados com sucesso');
+      
+    } catch (err: any) {
+      console.error('❌ Erro ao carregar pedidos:', err);
+      console.error('❌ Status:', err.response?.status);
+      console.error('❌ Data:', err.response?.data);
+      console.error('❌ Message:', err.message);
+      
+      let errorMessage = 'Erro ao carregar os pedidos.';
+      
+      if (err.response?.status === 401) {
+        errorMessage = 'Sessão expirada. Faça login novamente.';
+      } else if (err.response?.status === 404) {
+        errorMessage = 'Nenhum pedido encontrado.';
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -97,7 +133,17 @@ const PedidoListScreen: React.FC = () => {
   if (error) {
     return (
       <View style={styles.centered}>
+        <Text style={styles.errorIcon}>⚠️</Text>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => {
+            console.log('🔄 Tentando recarregar pedidos...');
+            fetchPedidos();
+          }}
+        >
+          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -434,6 +480,25 @@ const styles = StyleSheet.create({
   errorText: {
     color: 'red',
     fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#e5293e',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   card: {
     backgroundColor: '#fff',

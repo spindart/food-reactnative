@@ -8,4 +8,5 @@ router.get('/', auth_middleware_1.authenticateJWT, address_controller_1.AddressC
 router.post('/', auth_middleware_1.authenticateJWT, address_controller_1.AddressController.create);
 router.put('/:id', auth_middleware_1.authenticateJWT, address_controller_1.AddressController.update);
 router.delete('/:id', auth_middleware_1.authenticateJWT, address_controller_1.AddressController.remove);
+router.post('/:id/padrao', auth_middleware_1.authenticateJWT, address_controller_1.AddressController.setDefault);
 exports.default = router;

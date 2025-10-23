@@ -5,12 +5,16 @@ import { createEstabelecimento } from '../services/estabelecimentoService';
 import { Snackbar } from 'react-native-paper';
 import { getCategorias, Categoria } from '../services/categoriaService';
 import * as ImagePicker from 'expo-image-picker';
+import AddressInput from '../components/AddressInput';
+import { AddressSuggestion } from '../services/geolocationService';
 
 const CadastrarEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [endereco, setEndereco] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
   const [tempoEntregaMin, setTempoEntregaMin] = useState('30');
   const [tempoEntregaMax, setTempoEntregaMax] = useState('50');
   const [taxaEntrega, setTaxaEntrega] = useState('5.00');
@@ -30,6 +34,11 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
       if (prev.length < 3) return [...prev, id];
       return prev;
     });
+  };
+
+  const handleAddressSelect = (address: AddressSuggestion) => {
+    setLatitude(address.latitude);
+    setLongitude(address.longitude);
   };
 
   const pickImage = async () => {
@@ -54,6 +63,10 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
       setSnackbar({ visible: true, message: 'Selecione pelo menos uma categoria.', type: 'error' });
       return;
     }
+    if (!latitude || !longitude) {
+      setSnackbar({ visible: true, message: 'Selecione um endereço válido da lista de sugestões.', type: 'error' });
+      return;
+    }
     // if (!imagem) {
     //   setSnackbar({ visible: true, message: 'Selecione uma imagem.', type: 'error' });
     //   return;
@@ -64,6 +77,8 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         nome,
         descricao,
         endereco,
+        latitude,
+        longitude,
         tempoEntregaMin: Number(tempoEntregaMin),
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
@@ -98,11 +113,13 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         value={descricao}
         onChangeText={setDescricao}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Endereço"
+      <AddressInput
+        label="Endereço do Estabelecimento"
+        placeholder="Digite o endereço do estabelecimento"
         value={endereco}
         onChangeText={setEndereco}
+        onAddressSelect={handleAddressSelect}
+        required
       />
       <TextInput
         style={styles.input}

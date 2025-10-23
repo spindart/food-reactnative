@@ -43,6 +43,8 @@ model Estabelecimento {
   nome            String
   descricao       String
   endereco        String
+  latitude        Float?      // Latitude do estabelecimento
+  longitude       Float?      // Longitude do estabelecimento
   donoId          Int
   avaliacao       Float       @default(0)
   avaliacoesCount Int         @default(0)

@@ -76,7 +76,7 @@ router.post('/webhook/simulate-payment/:paymentId', async (req, res) => {
     const { type, data } = simulatedWebhook;
     
     if (type === 'payment' && data?.id) {
-      const paymentStatus = await MercadoPagoService.getPaymentStatus(data.id);
+      const paymentStatus = await MercadoPagoService.getPaymentStatus(data.id.toString());
       
       if (paymentStatus.status === 'approved') {
         console.log('✅ Pagamento simulado como aprovado!');
