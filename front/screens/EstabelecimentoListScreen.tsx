@@ -71,7 +71,8 @@ const EstabelecimentoListScreen: React.FC = () => {
       try {
         const data = await getCategorias();
         setCategorias(data);
-        if (data.length > 0) setCategoria(data[0].nome);
+        // Começar com "Todos" selecionado (string vazia)
+        setCategoria('');
       } catch (err) {
         // fallback: não faz nada
       }
@@ -98,12 +99,23 @@ const EstabelecimentoListScreen: React.FC = () => {
       const belongs = String(p.estabelecimentoId ?? '') === String(e.id);
       return belongs && p.nome.toLowerCase().includes(term);
     });
-    // Se não houver categoria selecionada, mostra todos
-    if (!categoria || categoria === '') return term ? (nomeMatch || categoriaMatch || produtoMatch) : true;
-    // Se o estabelecimento não tiver categorias, mostra também
-    if (!e.categorias || e.categorias.length === 0) return nomeMatch;
-    // Se houver categoria, filtra normalmente
-    return (nomeMatch || categoriaMatch || produtoMatch) && e.categorias.some((cat: Categoria) => cat.nome === categoria);
+    
+    // Se "Todos" estiver selecionado (categoria vazia), mostra todos conforme busca
+    if (!categoria || categoria === '') {
+      return term ? (nomeMatch || categoriaMatch || produtoMatch) : true;
+    }
+    
+    // Se o estabelecimento não tiver categorias e houver busca, verifica apenas busca
+    if (!e.categorias || e.categorias.length === 0) {
+      return nomeMatch || categoriaMatch || produtoMatch;
+    }
+    
+    // Se houver categoria selecionada, filtra por categoria E busca
+    const matchesCategory = e.categorias.some((cat: Categoria) => cat.nome === categoria);
+    if (term) {
+      return matchesCategory && (nomeMatch || categoriaMatch || produtoMatch);
+    }
+    return matchesCategory;
   }), [estabelecimentos, search, categoria, produtos]);
 
   const featured = useMemo(() => filtered.slice(0, 6), [filtered]);
