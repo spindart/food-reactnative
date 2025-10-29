@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { createOrder } from '../services/orderService';
@@ -18,7 +19,6 @@ const RevisarPedidoScreen: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
   
-  // Dados vindos das telas anteriores
   const {
     endereco,
     opcaoEntrega,
@@ -38,11 +38,9 @@ const RevisarPedidoScreen: React.FC = () => {
   const cartItems = cartState.items;
 
   useEffect(() => {
-    // Carregar userId e dados do usuário
     getCurrentUser().then(async (user) => {
       setUserId(user?.id ? String(user.id) : null);
       
-      // Buscar dados completos do usuário
       if (user?.id) {
         try {
           const userCompleteData = await getUsuarioById(String(user.id));
@@ -60,7 +58,6 @@ const RevisarPedidoScreen: React.FC = () => {
 
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    // Taxa de entrega vem dos parâmetros da tela anterior
     const taxaEntrega = opcaoEntrega === 'retirada' ? 0 : (route.params?.taxaEntrega || 0);
     return subtotal + taxaEntrega;
   };
@@ -72,7 +69,7 @@ const RevisarPedidoScreen: React.FC = () => {
       if (usarCartaoSalvo && cartaoSelecionado) {
         return `${cartaoSelecionado.paymentMethodId.toUpperCase()} ****${cartaoSelecionado.lastFourDigits}`;
       } else {
-        return `Cartão ****${cardNumber.slice(-4)}`;
+        return `Cartão ****${cardNumber?.slice(-4) || '****'}`;
       }
     } else if (formaPagamento === 'pix') {
       return 'PIX';
@@ -89,7 +86,6 @@ const RevisarPedidoScreen: React.FC = () => {
     setLoading(true);
     
     try {
-      // Obter estabelecimentoId do primeiro item do carrinho
       const estabelecimentoId = cartItems[0].estabelecimentoId;
       
       if (!estabelecimentoId) {
@@ -97,7 +93,6 @@ const RevisarPedidoScreen: React.FC = () => {
         return;
       }
 
-      // Se for PIX, iniciar pagamento sem criar pedido
       if (formaPagamento === 'pix') {
         const pixResp = await iniciarPagamentoPix({
           amount: calculateTotal(),
@@ -105,7 +100,7 @@ const RevisarPedidoScreen: React.FC = () => {
           payerEmail: userData?.email || 'usuario@exemplo.com',
           payerFirstName: userData?.nome?.split(' ')[0] || 'Usuario',
           payerLastName: userData?.nome?.split(' ').slice(1).join(' ') || 'Teste',
-          payerCpf: '19119119100', // CPF válido para testes conforme documentação
+          payerCpf: '19119119100',
           payerAddress: {
             zip_code: '06233200',
             street_name: 'Av. das Nações Unidas',
@@ -116,7 +111,6 @@ const RevisarPedidoScreen: React.FC = () => {
           },
         });
         
-        // Navegar para tela de confirmação PIX
         (navigation as any).navigate('PixPaymentConfirmation', {
           pixData: pixResp,
           orderData: {
@@ -131,13 +125,11 @@ const RevisarPedidoScreen: React.FC = () => {
         return;
       }
 
-      // Se for pagamento com cartão, processar pagamento primeiro
       if (formaPagamento === 'cartao') {
         let paymentResult;
         
         try {
           if (usarCartaoSalvo && cartaoSelecionado) {
-            // Pagamento com cartão salvo
             console.log('💳 Processando pagamento com cartão salvo...');
             
             if (!savedCardCvv) {
@@ -145,13 +137,11 @@ const RevisarPedidoScreen: React.FC = () => {
               return;
             }
 
-            // Buscar customer ID do usuário
             const user = await getCurrentUser();
             if (!user?.id) {
               throw new Error('Usuário não encontrado');
             }
 
-            // Buscar dados completos do usuário para obter customerId do MercadoPago
             const usuarioCompleto = await getUsuarioById(String(user.id));
             if (!usuarioCompleto.mercadoPagoCustomerId) {
               throw new Error('Usuário não possui customer ID do MercadoPago');
@@ -162,13 +152,12 @@ const RevisarPedidoScreen: React.FC = () => {
               description: `Pedido em ${estabelecimentoId}`,
               payerEmail: userData?.email || '',
               customerId: usuarioCompleto.mercadoPagoCustomerId,
-              cardId: cartaoSelecionado.id.toString(), // ID do cartão no banco local (não o mercadoPagoCardId)
+              cardId: cartaoSelecionado.id.toString(),
               securityCode: savedCardCvv,
               installments: 1,
               paymentMethodId: cartaoSelecionado.paymentMethodId
             });
           } else {
-            // Pagamento com cartão novo
             console.log('💳 Processando pagamento com cartão novo...');
             
             if (!cardNumber || !cardName || !cardExp || !cardCvv) {
@@ -176,7 +165,6 @@ const RevisarPedidoScreen: React.FC = () => {
               return;
             }
 
-            // Gerar token do cartão
             const token = await generateCardToken({
               cardNumber,
               cardExp,
@@ -184,10 +172,8 @@ const RevisarPedidoScreen: React.FC = () => {
               cardName
             });
 
-            // Detectar bandeira
             const paymentMethodId = CardManagementService.detectCardBrand(cardNumber);
 
-            // Processar pagamento
             paymentResult = await createCardPayment({
               amount: calculateTotal(),
               description: `Pedido em ${estabelecimentoId}`,
@@ -199,11 +185,9 @@ const RevisarPedidoScreen: React.FC = () => {
             });
           }
 
-          // Verificar se pagamento foi aprovado ou está pendente
           if (paymentResult.status === 'approved' || paymentResult.status === 'pending') {
             console.log('✅ Pagamento processado:', paymentResult.paymentId);
             
-            // Criar pedido com paymentId
             const payload = {
               clienteId: Number(userId),
               estabelecimentoId: Number(estabelecimentoId),
@@ -213,11 +197,9 @@ const RevisarPedidoScreen: React.FC = () => {
               })),
               formaPagamento: 'cartao',
               total: calculateTotal(),
-              // Informações de pagamento
               paymentId: paymentResult.paymentId,
               paymentStatus: paymentResult.status,
               paymentMethod: 'credit_card',
-              // Endereço de entrega
               enderecoEntrega: endereco?.address || endereco,
             };
             
@@ -225,7 +207,6 @@ const RevisarPedidoScreen: React.FC = () => {
             const response = await createOrder(payload);
             console.log('Pedido criado com sucesso:', response);
             
-            // Limpar carrinho
             dispatch({ type: 'CLEAR_CART' });
             
             Alert.alert(
@@ -255,7 +236,6 @@ const RevisarPedidoScreen: React.FC = () => {
         return;
       }
 
-      // Para dinheiro ou outros métodos, criar pedido diretamente
       const payload = {
         clienteId: Number(userId),
         estabelecimentoId: Number(estabelecimentoId),
@@ -265,21 +245,17 @@ const RevisarPedidoScreen: React.FC = () => {
         })),
         formaPagamento: formaPagamento || 'dinheiro',
         total: calculateTotal(),
-        // Informações de pagamento na entrega (se aplicável)
         formaPagamentoEntrega: formaPagamentoEntrega,
         precisaTroco: precisaTroco,
         trocoParaQuanto: precisaTroco ? parseFloat(trocoParaQuanto || '0') : undefined,
-        // Endereço de entrega
         enderecoEntrega: endereco?.address || endereco,
       };
       
       console.log('Criando pedido com payload:', payload);
       
-      // Criar o pedido
       const response = await createOrder(payload);
       console.log('Pedido criado com sucesso:', response);
       
-      // Limpar carrinho
       dispatch({ type: 'CLEAR_CART' });
       
       Alert.alert(
@@ -289,7 +265,6 @@ const RevisarPedidoScreen: React.FC = () => {
           {
             text: 'OK',
             onPress: () => {
-              // Navegar para tela de pedidos
               (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' });
             }
           }
@@ -308,207 +283,85 @@ const RevisarPedidoScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 bg-gray-100">
       {/* Header */}
-      <View style={styles.header}>
+      <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-gray-200">
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+          <Ionicons name="arrow-back" size={24} color="#ea1d2c" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SACOLA</Text>
-        <View style={styles.headerSpacer} />
+        <Text className="text-lg font-bold text-gray-800">SACOLA</Text>
+        <View className="w-6" />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Modal de revisão */}
-        <View style={styles.reviewModal}>
-          <Text style={styles.reviewTitle}>Revise o seu pedido</Text>
+        <View className="bg-white m-4 rounded-2xl p-6 shadow-lg">
+          <Text className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            Revise o seu pedido
+          </Text>
           
           {/* Entrega */}
-          <View style={styles.reviewItem}>
-            <Text style={styles.reviewIcon}>🏍️</Text>
-            <View style={styles.reviewContent}>
-              <Text style={styles.reviewLabel}>Entrega hoje</Text>
-              <Text style={styles.reviewValue}>Hoje, 70 - 80 min</Text>
+          <View className="flex-row items-center py-4 border-b border-gray-200">
+            <Text className="text-xl mr-4">🏍️</Text>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-800 mb-1">Entrega hoje</Text>
+              <Text className="text-sm text-gray-600">Hoje, 70 - 80 min</Text>
             </View>
           </View>
 
           {/* Endereço */}
-          <View style={styles.reviewItem}>
-            <Text style={styles.reviewIcon}>📍</Text>
-            <View style={styles.reviewContent}>
-              <Text style={styles.reviewLabel}>{endereco?.address || 'Endereço não selecionado'}</Text>
-              <Text style={styles.reviewValue}>{endereco?.label || 'Endereço'}</Text>
+          <View className="flex-row items-center py-4 border-b border-gray-200">
+            <Text className="text-xl mr-4">📍</Text>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-800 mb-1">{endereco?.address || 'Endereço não selecionado'}</Text>
+              <Text className="text-sm text-gray-600">{endereco?.label || 'Endereço'}</Text>
             </View>
           </View>
 
-          {/* Cupom */}
-          {/* <View style={styles.reviewItem}>
-            <Text style={styles.reviewIcon}>🎫</Text>
-            <View style={styles.reviewContent}>
-              <Text style={styles.reviewLabel}>Cupom</Text>
-              <Text style={styles.reviewValue}>1 do Clube para usar nessa loja</Text>
-            </View>
-          </View> */}
-
           {/* Pagamento */}
-          <View style={styles.reviewItem}>
-            <Text style={styles.reviewIcon}>
+          <View className="flex-row items-center py-4">
+            <Text className="text-xl mr-4">
               {formaPagamento === 'pix' ? '📱' : formaPagamento === 'cartao' ? '💳' : '💵'}
             </Text>
-            <View style={styles.reviewContent}>
-              <Text style={styles.reviewLabel}>Pagamento pelo app</Text>
-              <Text style={styles.reviewValue}>{formatPaymentMethod()}</Text>
+            <View className="flex-1">
+              <Text className="text-base font-semibold text-gray-800 mb-1">Pagamento pelo app</Text>
+              <Text className="text-sm text-gray-600">{formatPaymentMethod()}</Text>
             </View>
-            <Text style={styles.reviewPrice}>R$ {calculateTotal().toFixed(2)}</Text>
+            <Text className="text-base font-bold text-gray-800">R$ {calculateTotal().toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-8 pt-4 px-4">
         <TouchableOpacity
-          style={[
-            styles.confirmButton,
-            loading && { opacity: 0.7 }
-          ]}
+          className={`bg-red-600 rounded-xl py-4 items-center mb-3 ${
+            loading ? 'opacity-70' : ''
+          }`}
           onPress={handleConfirmOrder}
           disabled={loading}
+          activeOpacity={0.8}
         >
-          <Text style={styles.confirmButtonText}>
-            {loading ? 'Processando...' : 'Fazer pedido'}
-          </Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text className="text-white text-lg font-bold">
+              Fazer pedido
+            </Text>
+          )}
         </TouchableOpacity>
         
         <TouchableOpacity
-          style={styles.changeOrderButton}
+          className="items-center py-2"
           onPress={handleChangeOrder}
+          activeOpacity={0.8}
         >
-          <Text style={styles.changeOrderButtonText}>Alterar pedido</Text>
+          <Text className="text-red-600 text-base font-semibold">Alterar pedido</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  backButton: {
-    fontSize: 24,
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  headerSpacer: {
-    width: 24,
-  },
-  scrollView: {
-    flex: 1,
-    paddingBottom: 120,
-  },
-  reviewModal: {
-    backgroundColor: '#fff',
-    margin: 16,
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  reviewTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  reviewItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  reviewIcon: {
-    fontSize: 20,
-    marginRight: 16,
-    width: 24,
-    textAlign: 'center',
-  },
-  reviewContent: {
-    flex: 1,
-  },
-  reviewLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  reviewValue: {
-    fontSize: 14,
-    color: '#666',
-  },
-  reviewPrice: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingBottom: 34,
-    paddingTop: 16,
-    paddingHorizontal: 16,
-  },
-  confirmButton: {
-    backgroundColor: '#e5293e',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#e5293e',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  confirmButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  changeOrderButton: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  changeOrderButtonText: {
-    color: '#e5293e',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
 export default RevisarPedidoScreen;
+
