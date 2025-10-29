@@ -42,8 +42,19 @@ router.post('/pix', async function (req, res) {
 router.post('/cartao', async function (req, res) {
     console.log('Recebido /pagamento/cartao:', req.body);
     const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId, cardExp, cardName, cardCvv } = req.body;
-    if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
-        return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
+    // Validação condicional: para cartão salvo não exigimos token; para cartão novo token é obrigatório
+    if (!amount || !description || !payerEmail || !installments || !paymentMethodId) {
+        return res.status(400).json({ error: 'amount, description, payerEmail, installments e paymentMethodId são obrigatórios' });
+    }
+    if (usarCartaoSalvo) {
+        if (!cartaoId || !securityCode) {
+            return res.status(400).json({ error: 'Para cartão salvo, cartaoId e securityCode são obrigatórios' });
+        }
+    }
+    else {
+        if (!token) {
+            return res.status(400).json({ error: 'token é obrigatório para pagamento com cartão novo' });
+        }
     }
     try {
         let payment;
