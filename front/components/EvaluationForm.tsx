@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text } from 'react-native';
 
 type EvaluationFormProps = {
   onSubmit: (nota: number, comentario: string) => void;
@@ -20,52 +20,32 @@ const EvaluationForm: React.FC<EvaluationFormProps> = ({ onSubmit }) => {
   };
 
   return (
-    <View style={styles.container}>
+    <View className="mt-2">
       <TextInput
-        style={styles.input}
+        className="bg-gray-50 rounded-lg p-2.5 mb-2.5 border border-gray-300 text-sm text-gray-800"
         placeholder="Nota (0-5)"
+        placeholderTextColor="#aaa"
         keyboardType="numeric"
         value={nota.toString()}
         onChangeText={(text) => setNota(Number(text))}
       />
       <TextInput
-        style={styles.input}
+        className="bg-gray-50 rounded-lg p-2.5 mb-2.5 border border-gray-300 text-sm text-gray-800"
         placeholder="Comentário"
+        placeholderTextColor="#aaa"
         value={comentario}
         onChangeText={setComentario}
+        multiline
       />
-      <TouchableOpacity onPress={handleSubmit} style={styles.button}>
-        <Text style={styles.buttonText}>Enviar Avaliação</Text>
+      <TouchableOpacity 
+        onPress={handleSubmit} 
+        className="bg-red-600 p-2.5 rounded-lg items-center"
+        activeOpacity={0.8}
+      >
+        <Text className="text-white text-base font-bold">Enviar Avaliação</Text>
       </TouchableOpacity>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 10,
-  },
-  input: {
-    backgroundColor: '#f6f6f6',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    fontSize: 14,
-    color: '#333',
-  },
-  button: {
-    backgroundColor: '#e5293e',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-});
 
 export default EvaluationForm;
