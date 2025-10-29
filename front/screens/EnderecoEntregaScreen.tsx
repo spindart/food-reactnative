@@ -4,6 +4,8 @@ import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/nativ
 import { getEnderecos, addEndereco } from '../services/enderecoService';
 import { useCart } from '../context/CartContext';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
+import AddressInput from '../components/AddressInput';
+import { AddressSuggestion } from '../services/geolocationService';
 
 const EnderecoEntregaScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -17,13 +19,9 @@ const EnderecoEntregaScreen: React.FC = () => {
   
   // Estados para novo endereço
   const [newAddressLabel, setNewAddressLabel] = useState('');
-  const [newAddressStreet, setNewAddressStreet] = useState('');
-  const [newAddressNumber, setNewAddressNumber] = useState('');
-  const [newAddressComplement, setNewAddressComplement] = useState('');
-  const [newAddressNeighborhood, setNewAddressNeighborhood] = useState('');
-  const [newAddressCity, setNewAddressCity] = useState('');
-  const [newAddressState, setNewAddressState] = useState('');
-  const [newAddressZipCode, setNewAddressZipCode] = useState('');
+  const [newAddressValue, setNewAddressValue] = useState('');
+  const [newAddressLatitude, setNewAddressLatitude] = useState<number | null>(null);
+  const [newAddressLongitude, setNewAddressLongitude] = useState<number | null>(null);
   const [addressModalError, setAddressModalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -64,22 +62,22 @@ const EnderecoEntregaScreen: React.FC = () => {
   const handleAddAddress = async () => {
     setAddressModalError(null);
     
-    if (!newAddressLabel.trim() || !newAddressStreet.trim() || !newAddressNumber.trim() || 
-        !newAddressNeighborhood.trim() || !newAddressCity.trim() || !newAddressState.trim() || 
-        !newAddressZipCode.trim()) {
+    if (!newAddressLabel.trim() || !newAddressValue.trim()) {
       setAddressModalError('Preencha todos os campos obrigatórios!');
       return;
     }
 
+    if (!newAddressLatitude || !newAddressLongitude) {
+      setAddressModalError('Selecione um endereço válido usando a busca!');
+      return;
+    }
+
     try {
-      // Construir endereço completo
-      const enderecoCompleto = `${newAddressStreet}, ${newAddressNumber}${newAddressComplement ? ', ' + newAddressComplement : ''}, ${newAddressNeighborhood}, ${newAddressCity} - ${newAddressState}, ${newAddressZipCode}`;
-      
       const novoEndereco = await addEndereco({
         label: newAddressLabel,
-        address: enderecoCompleto,
-        latitude: 0,
-        longitude: 0,
+        address: newAddressValue,
+        latitude: newAddressLatitude,
+        longitude: newAddressLongitude,
       });
 
       // Recarregar endereços
@@ -91,13 +89,9 @@ const EnderecoEntregaScreen: React.FC = () => {
       // Fechar modal e limpar campos
       setShowAddressModal(false);
       setNewAddressLabel('');
-      setNewAddressStreet('');
-      setNewAddressNumber('');
-      setNewAddressComplement('');
-      setNewAddressNeighborhood('');
-      setNewAddressCity('');
-      setNewAddressState('');
-      setNewAddressZipCode('');
+      setNewAddressValue('');
+      setNewAddressLatitude(null);
+      setNewAddressLongitude(null);
       
       Alert.alert('Sucesso', 'Endereço salvo e selecionado com sucesso!');
       
@@ -105,6 +99,12 @@ const EnderecoEntregaScreen: React.FC = () => {
       console.log('Erro ao adicionar endereço:', error);
       setAddressModalError(`Erro ao salvar endereço: ${error.message || 'Erro desconhecido'}`);
     }
+  };
+
+  const handleAddressSelect = (suggestion: AddressSuggestion) => {
+    setNewAddressValue(suggestion.displayName);
+    setNewAddressLatitude(suggestion.latitude);
+    setNewAddressLongitude(suggestion.longitude);
   };
 
   const handleContinue = () => {
@@ -266,59 +266,15 @@ const EnderecoEntregaScreen: React.FC = () => {
                 onChangeText={setNewAddressLabel}
               />
               
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Rua, Avenida, etc."
-                value={newAddressStreet}
-                onChangeText={setNewAddressStreet}
-              />
-              
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={[styles.modalInput, styles.inputHalf]}
-                  placeholder="Número"
-                  value={newAddressNumber}
-                  onChangeText={setNewAddressNumber}
-                  keyboardType="numeric"
-                />
-                <TextInput
-                  style={[styles.modalInput, styles.inputHalf]}
-                  placeholder="Complemento (opcional)"
-                  value={newAddressComplement}
-                  onChangeText={setNewAddressComplement}
-                />
-              </View>
-              
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Bairro"
-                value={newAddressNeighborhood}
-                onChangeText={setNewAddressNeighborhood}
-              />
-              
-              <View style={styles.inputRow}>
-                <TextInput
-                  style={[styles.modalInput, styles.inputTwoThirds]}
-                  placeholder="Cidade"
-                  value={newAddressCity}
-                  onChangeText={setNewAddressCity}
-                />
-                <TextInput
-                  style={[styles.modalInput, styles.inputThird]}
-                  placeholder="UF"
-                  value={newAddressState}
-                  onChangeText={setNewAddressState}
-                  maxLength={2}
-                />
-              </View>
-              
-              <TextInput
-                style={styles.modalInput}
-                placeholder="CEP"
-                value={newAddressZipCode}
-                onChangeText={setNewAddressZipCode}
-                keyboardType="numeric"
-                maxLength={8}
+              <AddressInput
+                label="Endereço"
+                placeholder="Digite o endereço completo"
+                value={newAddressValue}
+                onChangeText={setNewAddressValue}
+                onAddressSelect={handleAddressSelect}
+                required
+                showLocationButton={true}
+                style={styles.addressInputContainer}
               />
             </ScrollView>
             
@@ -330,13 +286,9 @@ const EnderecoEntregaScreen: React.FC = () => {
                   setShowAddressModal(false);
                   setAddressModalError(null);
                   setNewAddressLabel('');
-                  setNewAddressStreet('');
-                  setNewAddressNumber('');
-                  setNewAddressComplement('');
-                  setNewAddressNeighborhood('');
-                  setNewAddressCity('');
-                  setNewAddressState('');
-                  setNewAddressZipCode('');
+                  setNewAddressValue('');
+                  setNewAddressLatitude(null);
+                  setNewAddressLongitude(null);
                 }}
               >
                 <Text style={styles.modalButtonTextSecondary}>Cancelar</Text>
@@ -689,6 +641,9 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontSize: 13,
     fontWeight: '500',
+  },
+  addressInputContainer: {
+    marginBottom: 16,
   },
 });
 

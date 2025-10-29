@@ -41,7 +41,7 @@ router.post('/pix', async function (req, res) {
 // POST /pagamento/cartao
 router.post('/cartao', async function (req, res) {
     console.log('Recebido /pagamento/cartao:', req.body);
-    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId } = req.body;
+    const { amount, description, payerEmail, token, installments, paymentMethodId, issuerId, cardNumber, usarCartaoSalvo, cartaoId, securityCode, pedidoId, cardExp, cardName, cardCvv } = req.body;
     if (!amount || !description || !payerEmail || !token || !installments || !paymentMethodId) {
         return res.status(400).json({ error: 'amount, description, payerEmail, token, installments e paymentMethodId são obrigatórios' });
     }
@@ -91,6 +91,98 @@ router.post('/cartao', async function (req, res) {
                 paymentMethodId: finalPaymentMethodId,
                 issuerId
             });
+            // Se o pagamento foi aprovado, salvar o cartão automaticamente
+            console.log('🔍 Verificando status do pagamento:', {
+                status: payment.status,
+                status_detail: payment.status_detail,
+                hasCardNumber: !!cardNumber,
+                cardNumberLength: cardNumber?.length
+            });
+            // Considerar pagamento como aprovado se status for 'approved' ou 'pending' (que pode ser aprovado posteriormente)
+            if ((payment.status === 'approved' || payment.status === 'pending') && cardNumber) {
+                console.log('✅ Pagamento aprovado! Salvando cartão automaticamente...');
+                try {
+                    // Buscar usuário pelo email
+                    const { PrismaClient } = require('@prisma/client');
+                    const prisma = new PrismaClient();
+                    const usuario = await prisma.usuario.findFirst({
+                        where: { email: payerEmail }
+                    });
+                    if (usuario) {
+                        // Criar ou obter customer no MercadoPago
+                        let customerId = usuario.mercadoPagoCustomerId;
+                        if (!customerId) {
+                            const customer = await mercadopago_service_1.MercadoPagoService.createCustomer(usuario.email);
+                            customerId = customer.id;
+                            // Atualizar usuário com customer ID
+                            await prisma.usuario.update({
+                                where: { id: usuario.id },
+                                data: { mercadoPagoCustomerId: customerId }
+                            });
+                        }
+                        // Adicionar cartão ao customer no MercadoPago
+                        const mercadoPagoCard = await mercadopago_service_1.MercadoPagoService.addCardToCustomer(customerId, token);
+                        // Extrair dados do cartão
+                        const cleanCardNumber = cardNumber.replace(/\s/g, '');
+                        const lastFourDigits = cleanCardNumber.slice(-4);
+                        const firstSixDigits = cleanCardNumber.slice(0, 6);
+                        const expParts = req.body.cardExp?.split('/') || ['01', '30'];
+                        const expirationMonth = parseInt(expParts[0], 10);
+                        const expirationYear = parseInt(expParts[1], 10) + 2000;
+                        // Verificar se o cartão já existe
+                        console.log('🔍 Verificando se cartão já existe:', {
+                            mercadoPagoCardId: mercadoPagoCard.id,
+                            usuarioId: usuario.id
+                        });
+                        const cartaoExistente = await prisma.cartao.findFirst({
+                            where: {
+                                mercadoPagoCardId: mercadoPagoCard.id,
+                                usuarioId: usuario.id
+                            }
+                        });
+                        if (!cartaoExistente) {
+                            // Verificar se é o primeiro cartão (será o padrão)
+                            const existingCartoes = await prisma.cartao.count({
+                                where: { usuarioId: usuario.id }
+                            });
+                            const isDefault = existingCartoes === 0;
+                            console.log('🔍 Dados do cartão para salvar:', {
+                                usuarioId: usuario.id,
+                                mercadoPagoCardId: mercadoPagoCard.id,
+                                lastFourDigits,
+                                firstSixDigits,
+                                expirationMonth,
+                                expirationYear,
+                                paymentMethodId: finalPaymentMethodId,
+                                isDefault,
+                                existingCartoes
+                            });
+                            // Salvar cartão no banco
+                            const cartaoSalvo = await prisma.cartao.create({
+                                data: {
+                                    usuarioId: usuario.id,
+                                    mercadoPagoCardId: mercadoPagoCard.id,
+                                    lastFourDigits,
+                                    firstSixDigits,
+                                    expirationMonth,
+                                    expirationYear,
+                                    paymentMethodId: finalPaymentMethodId,
+                                    isDefault
+                                }
+                            });
+                            console.log('✅ Cartão salvo automaticamente após pagamento aprovado:', cartaoSalvo);
+                        }
+                        else {
+                            console.log('⚠️ Cartão já existe, não salvando novamente:', cartaoExistente);
+                        }
+                    }
+                    await prisma.$disconnect();
+                }
+                catch (saveError) {
+                    console.error('❌ Erro ao salvar cartão automaticamente:', saveError);
+                    // Não falhar o pagamento por causa do erro de salvamento
+                }
+            }
         }
         // Pedido será criado após pagamento aprovado no frontend
         // Não salvar informações de pagamento aqui pois o pedido ainda não existe

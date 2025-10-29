@@ -295,7 +295,9 @@ export class MercadoPagoService {
         description, 
         payerEmail, 
         paymentMethodId, 
-        installments 
+        installments,
+        issuerId,
+        token: token.substring(0, 10) + '...'
       });
       
       // Validações básicas
@@ -369,12 +371,18 @@ export class MercadoPagoService {
         throw new Error('Bandeira do cartão não reconhecida. Verifique o número do cartão ou tente outro cartão.');
       }
       
+      if (error.message === 'not_result_by_params') {
+        throw new Error('Parâmetros do pagamento inválidos. Verifique os dados do cartão e tente novamente.');
+      }
+      
       if (error.response?.status === 400) {
         const errorData = error.response.data;
         if (errorData.message?.includes('invalid_token')) {
           throw new Error('Token do cartão inválido ou expirado');
         } else if (errorData.message?.includes('insufficient_amount')) {
           throw new Error('Valor insuficiente para o pagamento');
+        } else if (errorData.message?.includes('not_result_by_params')) {
+          throw new Error('Parâmetros do pagamento inválidos. Verifique os dados do cartão e tente novamente.');
         }
       }
       

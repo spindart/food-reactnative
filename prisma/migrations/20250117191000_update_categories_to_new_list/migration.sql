@@ -12,3 +12,6 @@ INSERT INTO "Categoria" ("nome") VALUES
 ('Pet shop'),
 ('Saudável / Vegana / Vegetariana'),
 ('Sobremesas / Açaí / Doces');
+
+
+

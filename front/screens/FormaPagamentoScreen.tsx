@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getCurrentUser } from '../services/currentUserService';
-import { getCartoes, Cartao } from '../services/cartaoService';
+import { getCartoes, Cartao, adicionarCartao } from '../services/cartaoService';
 import { useCart } from '../context/CartContext';
 import { getEstabelecimentoById } from '../services/estabelecimentoService';
+import { generateCardToken } from '../services/cardPaymentService';
 
 const FormaPagamentoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -25,6 +26,7 @@ const FormaPagamentoScreen: React.FC = () => {
   const [cardExp, setCardExp] = useState('');
   const [cardCvv, setCardCvv] = useState('');
   const [cardError, setCardError] = useState('');
+  const [savingCard, setSavingCard] = useState(false);
   
   // Estados para pagamento na entrega
   const [showDeliveryPaymentModal, setShowDeliveryPaymentModal] = useState(false);
@@ -98,6 +100,12 @@ const FormaPagamentoScreen: React.FC = () => {
     if (method === 'dinheiro') {
       setShowDeliveryPaymentModal(true);
     } else if (method === 'cartao') {
+      // Se já tem cartão selecionado, usando cartão salvo e já temos CVV nesta sessão, não abrir modal
+      if (cartaoSelecionado && usarCartaoSalvo && savedCardCvv) {
+        // Já está tudo configurado, não precisa abrir modal
+        return;
+      }
+      
       if (cartoesSalvos.length > 0) {
         setShowCardSelectionModal(true);
       } else {
@@ -137,7 +145,12 @@ const FormaPagamentoScreen: React.FC = () => {
     }
 
     if (formaPagamento === 'cartao' && usarCartaoSalvo && !savedCardCvv) {
-      Alert.alert('Atenção', 'Digite o CVV do cartão selecionado');
+      // Se tem cartão selecionado mas não tem CVV, abrir modal de seleção
+      if (cartaoSelecionado) {
+        setShowCardSelectionModal(true);
+      } else {
+        Alert.alert('Atenção', 'Selecione um cartão primeiro');
+      }
       return;
     }
 
@@ -483,8 +496,8 @@ const FormaPagamentoScreen: React.FC = () => {
                       return;
                     }
                     setUsarCartaoSalvo(true);
+                    setFormaPagamento('cartao');
                     setShowCardSelectionModal(false);
-                    Alert.alert('Sucesso', 'Cartão selecionado com sucesso!');
                   }}
                   disabled={!savedCardCvv}
                 >
@@ -557,19 +570,76 @@ const FormaPagamentoScreen: React.FC = () => {
             ) : null}
             
             <TouchableOpacity 
-              style={[styles.modalButton, styles.modalButtonPrimary, { marginTop: 12 }]} 
-              onPress={() => {
+              style={[
+                styles.modalButton, 
+                styles.modalButtonPrimary, 
+                { marginTop: 12 },
+                savingCard && { opacity: 0.7 }
+              ]} 
+              onPress={async () => {
                 if (!cardNumber || !cardName || !cardExp || !cardCvv) {
                   setCardError('Preencha todos os campos');
                   return;
                 }
-                setUsarCartaoSalvo(false);
-                setShowCardModal(false);
+
                 setCardError('');
-                Alert.alert('Sucesso', 'Dados do cartão preenchidos!');
+                setSavingCard(true);
+
+                try {
+                  const user = await getCurrentUser();
+                  if (!user?.id) {
+                    throw new Error('Usuário não encontrado');
+                  }
+
+                  // Gerar token do cartão
+                  const token = await generateCardToken({
+                    cardNumber,
+                    cardExp,
+                    cardCvv,
+                    cardName
+                  });
+
+                  // Salvar cartão no banco
+                  const result = await adicionarCartao({
+                    usuarioId: user.id,
+                    token,
+                    cardNumber,
+                    cardExp,
+                    cardCvv,
+                    cardName
+                  });
+
+                  // Recarregar lista de cartões
+                  await loadCartoesSalvos();
+
+                  // Selecionar o cartão recém-salvo e reutilizar o CVV já digitado
+                  const cartaoSalvo = result.cartao;
+                  setCartaoSelecionado(cartaoSalvo);
+                  setUsarCartaoSalvo(true);
+                  setSavedCardCvv(cardCvv); // reutiliza o CVV nesta mesma compra
+                  setFormaPagamento('cartao');
+                  
+                  setShowCardModal(false);
+                  setCardNumber('');
+                  setCardName('');
+                  setCardExp('');
+                  setCardCvv('');
+                  
+                  // Não abrir modal de CVV agora, pois já temos o CVV desta sessão
+                } catch (error: any) {
+                  console.error('Erro ao salvar cartão:', error);
+                  setCardError(error.message || 'Erro ao salvar cartão. Tente novamente.');
+                } finally {
+                  setSavingCard(false);
+                }
               }}
+              disabled={savingCard}
             >
-              <Text style={styles.modalButtonTextPrimary}>Confirmar Cartão</Text>
+              {savingCard ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.modalButtonTextPrimary}>Confirmar Cartão</Text>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -871,6 +941,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
   },
   modalButtonPrimary: {
     backgroundColor: '#e5293e',
@@ -884,6 +956,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   modalButtonTextSecondary: {
     color: '#666',

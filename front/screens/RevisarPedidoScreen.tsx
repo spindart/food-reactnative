@@ -6,6 +6,8 @@ import { createOrder } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
 import { iniciarPagamentoPix } from '../services/pixService';
 import { getUsuarioById } from '../services/usuarioService';
+import { generateCardToken, createCardPayment, createPaymentWithSavedCard } from '../services/cardPaymentService';
+import CardManagementService from '../services/cardManagementService';
 
 const RevisarPedidoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -129,7 +131,131 @@ const RevisarPedidoScreen: React.FC = () => {
         return;
       }
 
-      // Para outros métodos de pagamento, criar pedido diretamente
+      // Se for pagamento com cartão, processar pagamento primeiro
+      if (formaPagamento === 'cartao') {
+        let paymentResult;
+        
+        try {
+          if (usarCartaoSalvo && cartaoSelecionado) {
+            // Pagamento com cartão salvo
+            console.log('💳 Processando pagamento com cartão salvo...');
+            
+            if (!savedCardCvv) {
+              Alert.alert('Erro', 'CVV do cartão é obrigatório');
+              return;
+            }
+
+            // Buscar customer ID do usuário
+            const user = await getCurrentUser();
+            if (!user?.id) {
+              throw new Error('Usuário não encontrado');
+            }
+
+            // Buscar dados completos do usuário para obter customerId do MercadoPago
+            const usuarioCompleto = await getUsuarioById(String(user.id));
+            if (!usuarioCompleto.mercadoPagoCustomerId) {
+              throw new Error('Usuário não possui customer ID do MercadoPago');
+            }
+
+            paymentResult = await createPaymentWithSavedCard({
+              amount: calculateTotal(),
+              description: `Pedido em ${estabelecimentoId}`,
+              payerEmail: userData?.email || '',
+              customerId: usuarioCompleto.mercadoPagoCustomerId,
+              cardId: cartaoSelecionado.id.toString(), // ID do cartão no banco local (não o mercadoPagoCardId)
+              securityCode: savedCardCvv,
+              installments: 1,
+              paymentMethodId: cartaoSelecionado.paymentMethodId
+            });
+          } else {
+            // Pagamento com cartão novo
+            console.log('💳 Processando pagamento com cartão novo...');
+            
+            if (!cardNumber || !cardName || !cardExp || !cardCvv) {
+              Alert.alert('Erro', 'Dados do cartão incompletos');
+              return;
+            }
+
+            // Gerar token do cartão
+            const token = await generateCardToken({
+              cardNumber,
+              cardExp,
+              cardCvv,
+              cardName
+            });
+
+            // Detectar bandeira
+            const paymentMethodId = CardManagementService.detectCardBrand(cardNumber);
+
+            // Processar pagamento
+            paymentResult = await createCardPayment({
+              amount: calculateTotal(),
+              description: `Pedido em ${estabelecimentoId}`,
+              payerEmail: userData?.email || '',
+              token,
+              installments: 1,
+              paymentMethodId,
+              cardNumber
+            });
+          }
+
+          // Verificar se pagamento foi aprovado ou está pendente
+          if (paymentResult.status === 'approved' || paymentResult.status === 'pending') {
+            console.log('✅ Pagamento processado:', paymentResult.paymentId);
+            
+            // Criar pedido com paymentId
+            const payload = {
+              clienteId: Number(userId),
+              estabelecimentoId: Number(estabelecimentoId),
+              produtos: cartItems.map((item) => ({
+                produtoId: Number(item.id),
+                quantidade: item.quantidade
+              })),
+              formaPagamento: 'cartao',
+              total: calculateTotal(),
+              // Informações de pagamento
+              paymentId: paymentResult.paymentId,
+              paymentStatus: paymentResult.status,
+              paymentMethod: 'credit_card',
+              // Endereço de entrega
+              enderecoEntrega: endereco?.address || endereco,
+            };
+            
+            console.log('Criando pedido com payload:', payload);
+            const response = await createOrder(payload);
+            console.log('Pedido criado com sucesso:', response);
+            
+            // Limpar carrinho
+            dispatch({ type: 'CLEAR_CART' });
+            
+            Alert.alert(
+              'Pedido Confirmado!', 
+              'Seu pedido foi realizado com sucesso e está sendo preparado.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' });
+                  }
+                }
+              ]
+            );
+          } else {
+            throw new Error(`Pagamento não foi aprovado. Status: ${paymentResult.status}`);
+          }
+        } catch (paymentError: any) {
+          console.error('Erro ao processar pagamento:', paymentError);
+          Alert.alert(
+            'Erro no Pagamento',
+            paymentError.message || 'Não foi possível processar o pagamento. Tente novamente.'
+          );
+          return;
+        }
+        
+        return;
+      }
+
+      // Para dinheiro ou outros métodos, criar pedido diretamente
       const payload = {
         clienteId: Number(userId),
         estabelecimentoId: Number(estabelecimentoId),

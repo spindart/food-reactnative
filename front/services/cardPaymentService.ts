@@ -100,8 +100,21 @@ export async function createCardPayment(payload: CardPaymentPayload): Promise<Ca
       throw new Error('Valor do pagamento inválido');
     }
     
-    if (!payload.description || !payload.payerEmail || !payload.token || !payload.paymentMethodId) {
+    if (!payload.description || !payload.payerEmail || !payload.paymentMethodId) {
       throw new Error('Dados obrigatórios ausentes');
+    }
+    
+    // Para cartão salvo, não precisa de token (será gerado no backend)
+    // Mas precisa de cartaoId e securityCode
+    if (payload.usarCartaoSalvo) {
+      if (!payload.cartaoId || !payload.securityCode) {
+        throw new Error('Para cartão salvo, cartaoId e securityCode são obrigatórios');
+      }
+    } else {
+      // Para cartão novo, token é obrigatório
+      if (!payload.token) {
+        throw new Error('Token do cartão é obrigatório');
+      }
     }
     
     if (!payload.installments || payload.installments < 1) {
@@ -177,7 +190,7 @@ export async function createPaymentWithSavedCard(paymentData: {
       installments: paymentData.installments || 1,
       paymentMethodId: paymentData.paymentMethodId || 'visa',
       usarCartaoSalvo: true,
-      cartaoId: parseInt(paymentData.cardId), // Assumindo que cardId é o ID do cartão no banco local
+      cartaoId: parseInt(paymentData.cardId), // cardId é o ID do cartão no banco local (não o mercadoPagoCardId)
       securityCode: paymentData.securityCode
     };
     
