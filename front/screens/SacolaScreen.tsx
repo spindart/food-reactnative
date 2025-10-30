@@ -41,12 +41,12 @@ const SacolaScreen: React.FC = () => {
     return subtotal + taxaEntrega;
   };
 
-  const handleRemoveItem = (itemId: string) => {
-    dispatch({ type: 'REMOVE_ITEM', payload: itemId });
+  const handleRemoveItem = (cartItemId: string) => {
+    dispatch({ type: 'REMOVE_ITEM', payload: cartItemId });
   };
 
-  const handleUpdateQuantity = (itemId: string, change: number) => {
-    const item = cartItems.find(i => i.id === itemId);
+  const handleUpdateQuantity = (cartItemId: string, change: number) => {
+    const item = cartItems.find(i => i.cartItemId === cartItemId);
     if (item) {
       dispatch({ type: 'ADD_ITEM', payload: { ...item, quantidade: change } });
     }
@@ -111,19 +111,22 @@ const SacolaScreen: React.FC = () => {
           <View className="px-4 py-4 bg-white">
             <Text className="text-lg font-bold text-gray-800 mb-3">Itens adicionados</Text>
             {cartItems.map((item) => (
-              <View key={item.id} className="flex-row items-center bg-gray-50 rounded-xl p-3 mb-3 border border-gray-200">
+              <View key={item.cartItemId} className="flex-row items-center bg-gray-50 rounded-xl p-3 mb-3 border border-gray-200">
                 <Image 
                   source={{ uri: (item as any).imagem || 'https://via.placeholder.com/80x80' }} 
                   className="w-15 h-15 rounded-lg mr-3 bg-gray-100"
                 />
                 <View className="flex-1">
                   <Text className="text-base font-semibold text-gray-800 mb-1">{item.nome}</Text>
+                  {!!item.observacao && (
+                    <Text className="text-xs text-gray-500 mb-1">Obs.: {item.observacao}</Text>
+                  )}
                   <Text className="text-sm font-bold text-red-600">R$ {item.preco.toFixed(2)}</Text>
                 </View>
                 <View className="flex-row items-center bg-white rounded-lg px-2 py-1 border border-gray-200">
                   <TouchableOpacity 
                     className="w-6 h-6 justify-center items-center"
-                    onPress={() => item.quantidade === 1 ? handleRemoveItem(item.id) : handleUpdateQuantity(item.id, -1)}
+                    onPress={() => item.quantidade === 1 ? handleRemoveItem(item.cartItemId) : handleUpdateQuantity(item.cartItemId, -1)}
                   >
                     {item.quantidade === 1 ? (
                       <Ionicons name="trash-outline" size={16} color="#ea1d2c" />
@@ -134,7 +137,7 @@ const SacolaScreen: React.FC = () => {
                   <Text className="text-base font-semibold text-gray-800 mx-2 min-w-[20px] text-center">{item.quantidade}</Text>
                   <TouchableOpacity 
                     className="w-6 h-6 justify-center items-center"
-                    onPress={() => handleUpdateQuantity(item.id, 1)}
+                    onPress={() => handleUpdateQuantity(item.cartItemId, 1)}
                   >
                     <Text className="text-base font-bold text-red-600">+</Text>
                   </TouchableOpacity>

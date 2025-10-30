@@ -17,7 +17,9 @@ import whatsappRoutes from './routes/whatsapp.routes';
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(express.json());
+// Aumenta o limite do corpo para permitir imagens base64 (data URI)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/api/estabelecimentos', estabelecimentoRoutes);
 app.use('/api/avaliacoes', avaliacaoRoutes);
 app.use('/api/produtos', produtoRoutes);

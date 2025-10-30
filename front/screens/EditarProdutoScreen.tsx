@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { updateProduto, deleteProduto } from '../services/produtoService';
 import { getCategorias, Categoria } from '../services/categoriaService';
 import { Snackbar } from 'react-native-paper';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 const EditarProdutoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -14,6 +16,7 @@ const EditarProdutoScreen: React.FC = () => {
   const [descricao, setDescricao] = useState(produto.descricao);
   const [preco, setPreco] = useState(produto.preco.toString());
   const [categoriaId, setCategoriaId] = useState('');
+  const [imagem, setImagem] = useState<string>(produto.imagem || '');
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
@@ -40,7 +43,7 @@ const EditarProdutoScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-  await updateProduto(produto.id, { nome, descricao, preco: parseFloat(preco), estabelecimentoId: produto.estabelecimentoId, categoriaId, imagem: produto.imagem });
+      await updateProduto(produto.id, { nome, descricao, preco: parseFloat(preco), estabelecimentoId: produto.estabelecimentoId, categoriaId, imagem });
       setSnackbar({ visible: true, message: 'Produto atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -51,6 +54,54 @@ const EditarProdutoScreen: React.FC = () => {
       setTimeout(() => setSnackbar((prev) => ({ ...prev, visible: false })), 2000);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    try {
+      // Solicitar permissão quando necessário
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permissão necessária', 'Precisamos de acesso às suas fotos para selecionar a imagem do produto.');
+          return;
+        }
+      }
+    const mediaTypes: any = (ImagePicker as any).MediaType?.Images || (ImagePicker as any).MediaTypeOptions?.Images;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      const guessMimeFromUri = (uri: string | undefined) => {
+        if (!uri) return 'image/jpeg';
+        const u = uri.toLowerCase();
+        if (u.endsWith('.png')) return 'image/png';
+        if (u.endsWith('.webp')) return 'image/webp';
+        if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'image/jpeg';
+        return 'image/jpeg';
+      };
+      const mime = (asset as any).mimeType || guessMimeFromUri(asset.uri);
+      if (asset.base64 && asset.base64.length > 0) {
+        setImagem(`data:${mime};base64,${asset.base64}`);
+        return;
+      }
+      if (asset.uri) {
+        try {
+          const b64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+          setImagem(`data:${mime};base64,${b64}`);
+        } catch (e) {
+          setImagem('');
+        }
+      }
+    }
+    } catch (err: any) {
+      console.error('ImagePicker error:', err);
+      Alert.alert('Erro', `Não foi possível abrir a galeria.${err?.message ? `\n${err.message}` : ''}`);
     }
   };
 
@@ -74,6 +125,18 @@ const EditarProdutoScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Editar Produto</Text>
+      <View style={{ alignItems: 'center', marginBottom: 12 }}>
+        {imagem ? (
+          <Image source={{ uri: imagem }} style={{ width: 120, height: 120, borderRadius: 12, marginBottom: 8 }} />
+        ) : (
+          <View style={{ width: 120, height: 120, borderRadius: 12, backgroundColor: '#eee', marginBottom: 8, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ color: '#aaa' }}>Sem imagem</Text>
+          </View>
+        )}
+        <TouchableOpacity style={[styles.button, { backgroundColor: '#6c63ff', marginBottom: 0 }]} onPress={pickImage}>
+          <Text style={styles.buttonText}>Selecionar Imagem</Text>
+        </TouchableOpacity>
+      </View>
       <TextInput
         style={styles.input}
         placeholder="Nome"

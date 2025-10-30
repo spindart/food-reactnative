@@ -12,6 +12,7 @@ interface PedidoItem {
   produtoId: string;
   quantidade: number;
   precoUnitario: number;
+  observacao?: string | null;
 }
 
 interface Pedido {
@@ -51,6 +52,7 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [statusLoading, setStatusLoading] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'pedidos' | 'historico'>('pedidos');
   const [snackbar, setSnackbar] = useState<{ visible: boolean; message: string; type: string }>({
     visible: false,
     message: '',
@@ -324,6 +326,13 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
     );
   }
 
+  // Filtrar por aba
+  const pedidosFiltrados = pedidos.filter((p) =>
+    activeTab === 'pedidos'
+      ? (p.status === 'pendente' || p.status === 'preparo')
+      : (p.status === 'entregue' || p.status === 'cancelado')
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -335,8 +344,32 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
           </View>
         )}
       </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'pedidos' ? styles.tabButtonActive : undefined,
+          ]}
+          onPress={() => setActiveTab('pedidos')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === 'pedidos' ? styles.tabTextActive : undefined]}>Pedidos</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            activeTab === 'historico' ? styles.tabButtonActive : undefined,
+          ]}
+          onPress={() => setActiveTab('historico')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.tabText, activeTab === 'historico' ? styles.tabTextActive : undefined]}>Histórico</Text>
+        </TouchableOpacity>
+      </View>
       <FlatList
-        data={pedidos}
+        data={pedidosFiltrados}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -370,7 +403,12 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
               <Text style={styles.itemsTitle}>🛒 Itens do Pedido</Text>
               {item.itens.map((it) => (
                 <View key={it.id} style={styles.itemRow}>
-                  <Text style={styles.itemName}>{produtos[it.produtoId]?.nome || it.produtoId}</Text>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.itemName}>{produtos[it.produtoId]?.nome || it.produtoId}</Text>
+                    {!!it.observacao && (
+                      <Text style={styles.itemObservation}>Obs.: {it.observacao}</Text>
+                    )}
+                  </View>
                   <Text style={styles.itemDetails}>
                     {it.quantidade}x R$ {it.precoUnitario.toFixed(2)} = R$ {(it.quantidade * it.precoUnitario).toFixed(2)}
                   </Text>
@@ -419,8 +457,8 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
             </View>
           </View>
         )}
-        contentContainerStyle={pedidos.length === 0 ? styles.centered : undefined}
-        ListEmptyComponent={<Text>Nenhum pedido encontrado.</Text>}
+        contentContainerStyle={pedidosFiltrados.length === 0 ? styles.centered : undefined}
+        ListEmptyComponent={<Text>{activeTab === 'pedidos' ? 'Nenhum pedido em andamento.' : 'Sem histórico por enquanto.'}</Text>}
       />
       {snackbar.visible && (
         <View
@@ -472,6 +510,34 @@ const styles = StyleSheet.create({
     color: '#e5293e',
     marginLeft: 6,
     fontWeight: '500',
+  },
+  // Tabs
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    overflow: 'hidden',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  tabButtonActive: {
+    backgroundColor: '#e5293e',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+  },
+  tabTextActive: {
+    color: '#fff',
   },
   
   // Card styles (iFood style)
@@ -630,6 +696,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
+  },
+  itemObservation: {
+    fontSize: 13,
+    color: '#555',
+    marginTop: 4,
   },
   
   // Total

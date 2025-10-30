@@ -408,6 +408,9 @@ const PedidoListScreen: React.FC = () => {
                             <Text className="text-base font-medium text-gray-800 mb-1">
                               {item.quantidade}x {item.produto?.nome || 'Produto'}
                             </Text>
+                            {!!item.observacao && (
+                              <Text className="text-xs text-gray-500 mb-1">Obs.: {item.observacao}</Text>
+                            )}
                             <Text className="text-sm text-gray-600">R$ {item.precoUnitario?.toFixed(2)}</Text>
                           </View>
                           <Text className="text-base font-bold text-red-600">

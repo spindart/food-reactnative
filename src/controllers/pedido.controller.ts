@@ -75,7 +75,10 @@ export class PedidoController {
         res.status(400).json({ error: 'Estabelecimento não encontrado.' });
         return;
       }
-      if (produtosDb.length !== produtos.length) {
+      // Validar que todos os produtoId enviados existem para o estabelecimento
+      const idsValidos = new Set(produtosDb.map((p: any) => p.id));
+      const algumInvalido = produtos.some((p: any) => !idsValidos.has(p.produtoId));
+      if (algumInvalido) {
         res.status(400).json({ error: 'Um ou mais produtos não encontrados para este estabelecimento.' });
         return;
       }
@@ -88,6 +91,7 @@ export class PedidoController {
           produtoId: p.produtoId,
           quantidade: p.quantidade,
           precoUnitario: produtoDb.preco,
+          observacao: (p as any).observacao || null,
         };
       });
       const taxaEntrega = estabelecimento.taxaEntrega || 0;
@@ -211,6 +215,7 @@ export class PedidoController {
           produtoId: p.produtoId,
           quantidade: p.quantidade,
           precoUnitario: produtoDb.preco,
+          observacao: p.observacao || null,
         };
       });
       
@@ -338,6 +343,7 @@ export class PedidoController {
               produtoId: true,
               quantidade: true,
               precoUnitario: true,
+              observacao: true,
               produto: {
                 select: {
                   id: true,

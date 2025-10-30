@@ -4,6 +4,7 @@ import api from './api';
 type ProdutoPayload = {
   produtoId: number;
   quantidade: number;
+  observacao?: string;
 };
 type CreateOrderPayload = {
   clienteId: number;

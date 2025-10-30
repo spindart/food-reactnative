@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { createProduto } from '../services/produtoService';
 import { Snackbar } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 const CadastrarProdutoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -21,15 +22,51 @@ const CadastrarProdutoScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const pickImage = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Permissão necessária', 'Precisamos de acesso às suas fotos para selecionar a imagem do produto.');
+          return;
+        }
+      }
+    const mediaTypes: any = (ImagePicker as any).MediaType?.Images || (ImagePicker as any).MediaTypeOptions?.Images;
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
       base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImagem(result.assets[0].base64 ? `data:image/jpeg;base64,${result.assets[0].base64}` : result.assets[0].uri);
+      const asset = result.assets[0];
+      const guessMimeFromUri = (uri: string | undefined) => {
+        if (!uri) return 'image/jpeg';
+        const u = uri.toLowerCase();
+        if (u.endsWith('.png')) return 'image/png';
+        if (u.endsWith('.webp')) return 'image/webp';
+        if (u.endsWith('.jpg') || u.endsWith('.jpeg')) return 'image/jpeg';
+        return 'image/jpeg';
+      };
+      const mime = (asset as any).mimeType || guessMimeFromUri(asset.uri);
+      if (asset.base64 && asset.base64.length > 0) {
+        setImagem(`data:${mime};base64,${asset.base64}`);
+        return;
+      }
+      // Garantir base64 mesmo quando a lib não retorna base64
+      if (asset.uri) {
+        try {
+          const b64 = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+          setImagem(`data:${mime};base64,${b64}`);
+        } catch (e) {
+          // fallback: mantém vazio para evitar salvar file:// que não renderiza depois
+          setImagem('');
+        }
+      }
+    }
+    } catch (err: any) {
+      console.error('ImagePicker error:', err);
+      Alert.alert('Erro', `Não foi possível abrir a galeria.${err?.message ? `\n${err.message}` : ''}`);
     }
   };
 

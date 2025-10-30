@@ -97,6 +97,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
                 dispatch({
                   type: 'ADD_ITEM',
                   payload: {
+                    cartItemId: `${modalProduto.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
                     id: modalProduto.id,
                     nome: modalProduto.nome,
                     preco: modalProduto.preco,
@@ -116,6 +117,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
     dispatch({
       type: 'ADD_ITEM',
       payload: {
+        cartItemId: `${modalProduto.id}-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
         id: modalProduto.id,
         nome: modalProduto.nome,
         preco: modalProduto.preco,

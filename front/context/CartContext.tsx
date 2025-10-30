@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 
 type CartItem = {
+  cartItemId: string;
   id: string;
   nome: string;
   preco: number;
@@ -21,12 +22,16 @@ type CartAction =
 const cartReducer = (state: CartState, action: CartAction): CartState => {
   switch (action.type) {
     case 'ADD_ITEM': {
-      const existingItem = state.items.find((item) => item.id === action.payload.id);
+      const existingItem = state.items.find((item) =>
+        action.payload.cartItemId
+          ? item.cartItemId === action.payload.cartItemId
+          : (item.id === action.payload.id && (item.observacao || '') === (action.payload.observacao || ''))
+      );
       if (existingItem) {
         return {
           ...state,
           items: state.items.map((item) =>
-            item.id === action.payload.id
+            item.cartItemId === (action.payload.cartItemId || item.cartItemId)
               ? { ...item, quantidade: item.quantidade + action.payload.quantidade }
               : item
           ),
@@ -35,7 +40,7 @@ const cartReducer = (state: CartState, action: CartAction): CartState => {
       return { ...state, items: [...state.items, action.payload] };
     }
     case 'REMOVE_ITEM': {
-      return { ...state, items: state.items.filter((item) => item.id !== action.payload) };
+      return { ...state, items: state.items.filter((item) => item.cartItemId !== action.payload) };
     }
     case 'CLEAR_CART': {
       return { ...state, items: [] };

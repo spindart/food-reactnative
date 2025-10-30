@@ -107,13 +107,21 @@ const PixPaymentConfirmationScreen: React.FC = () => {
       setIsCreatingOrder(true);
       
       // Criar o pedido após pagamento aprovado
+      const expandCartItems = (items: any[]) => {
+        return items.flatMap((item) => {
+          const count = Math.max(1, Number(item.quantidade) || 1);
+          return Array.from({ length: count }).map(() => ({
+            produtoId: Number(item.id),
+            quantidade: 1,
+            observacao: item.observacao ? String(item.observacao).trim() : undefined,
+          }));
+        });
+      };
+
       const payload = {
         clienteId: Number(orderData.userId),
         estabelecimentoId: Number(orderData.estabelecimentoId),
-        produtos: orderData.cartItems.map((item) => ({
-          produtoId: Number(item.id),
-          quantidade: item.quantidade
-        })),
+        produtos: expandCartItems(orderData.cartItems),
         formaPagamento: 'pix',
         total: orderData.total,
         // Informações de pagamento aprovado

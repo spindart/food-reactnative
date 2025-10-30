@@ -121,6 +121,7 @@ model ItemPedido {
   produtoId     Int
   quantidade    Int
   precoUnitario Float
+  observacao    String?
   pedido        Pedido  @relation(fields: [pedidoId], references: [id])
   produto       Produto @relation(fields: [produtoId], references: [id])
 }

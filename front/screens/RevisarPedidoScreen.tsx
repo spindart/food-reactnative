@@ -37,6 +37,17 @@ const RevisarPedidoScreen: React.FC = () => {
 
   const cartItems = cartState.items;
 
+  const expandCartItems = (items: any[]) => {
+    return items.flatMap((item) => {
+      const count = Math.max(1, Number(item.quantidade) || 1);
+      return Array.from({ length: count }).map(() => ({
+        produtoId: Number(item.id),
+        quantidade: 1,
+        observacao: item.observacao ? String(item.observacao).trim() : undefined,
+      }));
+    });
+  };
+
   useEffect(() => {
     getCurrentUser().then(async (user) => {
       setUserId(user?.id ? String(user.id) : null);
@@ -191,10 +202,7 @@ const RevisarPedidoScreen: React.FC = () => {
             const payload = {
               clienteId: Number(userId),
               estabelecimentoId: Number(estabelecimentoId),
-              produtos: cartItems.map((item) => ({
-                produtoId: Number(item.id),
-                quantidade: item.quantidade
-              })),
+              produtos: expandCartItems(cartItems),
               formaPagamento: 'cartao',
               total: calculateTotal(),
               paymentId: paymentResult.paymentId,
@@ -239,10 +247,7 @@ const RevisarPedidoScreen: React.FC = () => {
       const payload = {
         clienteId: Number(userId),
         estabelecimentoId: Number(estabelecimentoId),
-        produtos: cartItems.map((item) => ({
-          produtoId: Number(item.id),
-          quantidade: item.quantidade
-        })),
+        produtos: expandCartItems(cartItems),
         formaPagamento: formaPagamento || 'dinheiro',
         total: calculateTotal(),
         formaPagamentoEntrega: formaPagamentoEntrega,

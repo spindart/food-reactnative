@@ -23,6 +23,7 @@ export const produtoSchema = z.object({
   descricao: z.string().min(1, 'Descrição é obrigatória'),
   preco: z.number().positive('Preço deve ser positivo'),
   estabelecimentoId: z.number().int().positive('EstabelecimentoId deve ser um inteiro positivo'),
+  imagem: z.string().optional().nullable(),
 });
 
 // Esquema para Pedido
