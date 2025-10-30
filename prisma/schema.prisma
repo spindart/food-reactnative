@@ -29,6 +29,9 @@ model Usuario {
   nome             String
   email            String            @unique
   senha            String
+  cpf              String?           @unique // CPF do usuário
+  telefone         String?           // Telefone/WhatsApp do usuário
+  telefoneVerificado Boolean         @default(false) // Indica se o telefone foi verificado
   role             Role
   avaliacoes       Avaliacao[]
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
@@ -36,6 +39,8 @@ model Usuario {
   addresses        Address[]
   cartoes          Cartao[]
   mercadoPagoCustomerId String?       @unique // ID do customer no MercadoPago
+  createdAt        DateTime?         @default(now())
+  updatedAt        DateTime?         @updatedAt
 }
 
 model Estabelecimento {

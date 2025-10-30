@@ -148,7 +148,8 @@ const EstabelecimentoListScreen: React.FC = () => {
           <View>
             <BannerCarousel />
             <CategoryIcons categorias={categorias} selected={categoria} onSelect={setCategoria} />
-            
+          {/* Lojas em destaque */}
+{/*             
             {featured.length > 0 && (
               <View className="px-4 mt-2 mb-3">
                 <Text className="text-lg font-bold text-gray-800 mb-3">Lojas em destaque</Text>
@@ -168,7 +169,7 @@ const EstabelecimentoListScreen: React.FC = () => {
                   contentContainerStyle={{ paddingLeft: 12, paddingRight: 16 }}
                 />
               </View>
-            )}
+            )} */}
             
             <View className="px-4 pt-2 pb-3">
               <Text className="text-lg font-bold text-gray-800 mb-2">Todos os estabelecimentos</Text>

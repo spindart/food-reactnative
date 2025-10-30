@@ -84,11 +84,18 @@ const SacolaScreen: React.FC = () => {
         {estabelecimento && (
           <View className="px-4 py-4 bg-white">
             <View className="flex-row items-center">
-              <View className="w-12 h-12 rounded-full bg-amber-100 justify-center items-center mr-3">
-                <Text className="text-xs font-bold text-amber-900 text-center">
-                  {estabelecimento?.nome?.toUpperCase().substring(0, 3) || 'EST'}
-                </Text>
-              </View>
+              {estabelecimento?.imagem ? (
+                <Image
+                  source={{ uri: estabelecimento.imagem }}
+                  className="w-12 h-12 rounded-full mr-3 bg-gray-100"
+                />
+              ) : (
+                <View className="w-12 h-12 rounded-full bg-amber-100 justify-center items-center mr-3">
+                  <Text className="text-xs font-bold text-amber-900 text-center">
+                    {estabelecimento?.nome?.toUpperCase().substring(0, 3) || 'EST'}
+                  </Text>
+                </View>
+              )}
               <View className="flex-1">
                 <Text className="text-lg font-bold text-gray-800 mb-1">{estabelecimento?.nome || 'Estabelecimento'}</Text>
                 <TouchableOpacity onPress={() => estabelecimento && (navigation as any).navigate('ProdutosDoEstabelecimento', { estabelecimento })}>

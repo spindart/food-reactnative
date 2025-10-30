@@ -10,6 +10,8 @@ type RegisterPayload = {
   nome: string;
   email: string;
   senha: string;
+  cpf?: string;
+  telefone?: string;
   role: 'cliente' | 'dono' | 'admin';
 };
 
