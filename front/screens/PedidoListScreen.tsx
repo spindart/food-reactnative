@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { View, FlatList, Text, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import { updateOrderStatus } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
@@ -16,16 +17,12 @@ type Pedido = {
   formaPagamento?: string;
   estabelecimento?: { nome: string; imagem?: string };
   total?: number;
-  // Campos de pagamento na entrega
   formaPagamentoEntrega?: string;
   precisaTroco?: boolean;
   trocoParaQuanto?: number;
-  // Campos de pagamento online
   paymentMethod?: string;
   paymentStatus?: string;
-  // Endereço de entrega
   enderecoEntrega?: string;
-  // Taxa de entrega
   taxaEntrega?: number;
 };
 
@@ -60,7 +57,6 @@ const PedidoListScreen: React.FC = () => {
       console.log('✅ Resposta recebida:', response.status);
       console.log('📊 Dados dos pedidos:', JSON.stringify(response.data, null, 2));
       
-      // Separa pedidos em atuais e históricos
       const pedidosAtuais = response.data.filter((p: any) => p.status !== 'entregue' && p.status !== 'cancelado');
       const pedidosHistorico = response.data.filter((p: any) => p.status === 'entregue' || p.status === 'cancelado');
       
@@ -114,50 +110,74 @@ const PedidoListScreen: React.FC = () => {
     }
   };
 
-  // Mapeamento de status para label e ícone
-  const statusMap: Record<string, { label: string; color: string; icon: string }> = {
-    pendente: { label: 'Pendente', color: '#e5293e', icon: '⏳' },
-    preparo: { label: 'Em preparo', color: '#f7b731', icon: '🍳' },
-    entregue: { label: 'Entregue', color: '#2ecc71', icon: '✅' },
-    cancelado: { label: 'Cancelado', color: '#e74c3c', icon: '❌' },
+  const statusMap: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
+    pendente: { label: 'Pendente', color: '#ea1d2c', icon: 'time-outline' },
+    preparo: { label: 'Em preparo', color: '#f7b731', icon: 'restaurant-outline' },
+    entregue: { label: 'Entregue', color: '#2ecc71', icon: 'checkmark-circle-outline' },
+    cancelado: { label: 'Cancelado', color: '#e74c3c', icon: 'close-circle-outline' },
+  };
+
+  const getPaymentIcon = (pedido: Pedido) => {
+    if (pedido.formaPagamentoEntrega) {
+      return pedido.formaPagamentoEntrega === 'dinheiro' ? 'cash-outline' : 'card-outline';
+    }
+    if (pedido.formaPagamento === 'pix' || pedido.paymentMethod === 'pix') return 'phone-portrait-outline';
+    if (pedido.formaPagamento === 'cartao' || pedido.paymentMethod === 'credit_card') return 'card-outline';
+    return 'card-outline';
+  };
+
+  const getPaymentText = (pedido: Pedido) => {
+    if (pedido.formaPagamentoEntrega) {
+      const method = pedido.formaPagamentoEntrega === 'dinheiro' 
+        ? 'Dinheiro' 
+        : pedido.formaPagamentoEntrega === 'debito' 
+        ? 'Cartão de Débito' 
+        : 'Cartão de Crédito';
+      return `Pagar na entrega: ${method}${pedido.precisaTroco ? ` (Troco para R$ ${pedido.trocoParaQuanto?.toFixed(2)})` : ''}`;
+    }
+    if (pedido.formaPagamento === 'pix' || pedido.paymentMethod === 'pix') return 'PIX';
+    if (pedido.formaPagamento === 'cartao' || pedido.paymentMethod === 'credit_card') return 'Cartão de Crédito';
+    if (pedido.formaPagamento === 'dinheiro') return 'Dinheiro';
+    return pedido.paymentMethod || 'Pagamento online';
   };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#007BFF" />
+      <View className="flex-1 justify-center items-center bg-gray-100">
+        <ActivityIndicator size="large" color="#ea1d2c" />
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorIcon}>⚠️</Text>
-        <Text style={styles.errorText}>{error}</Text>
+      <View className="flex-1 justify-center items-center bg-gray-100 px-4">
+        <Text className="text-5xl mb-4">⚠️</Text>
+        <Text className="text-red-600 text-base text-center mb-4">{error}</Text>
         <TouchableOpacity 
-          style={styles.retryButton}
+          className="bg-red-600 px-6 py-3 rounded-lg"
           onPress={() => {
             console.log('🔄 Tentando recarregar pedidos...');
             fetchPedidos();
           }}
         >
-          <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+          <Text className="text-white text-base font-bold">Tentar Novamente</Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View className="flex-1 bg-gray-100">
       <FlatList
         data={pedidos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: 16 }}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
-          const statusInfo = statusMap[item.status] || { label: item.status, color: '#888', icon: '❔' };
+          const statusInfo = statusMap[item.status] || { label: item.status, color: '#888', icon: 'help-circle-outline' };
           const isPedidoAtual = item.status === 'pendente' || item.status === 'preparo';
           
-          // Calcular total se não estiver disponível
           let totalPedido = item.total;
           if (!totalPedido && item.itens) {
             const subtotal = item.itens.reduce((sum: number, itemPedido: any) => {
@@ -167,140 +187,167 @@ const PedidoListScreen: React.FC = () => {
           }
           
           return (
-            <TouchableOpacity onPress={async () => {
-              setSelectedPedido(item);
-              setModalVisible(true);
-              // Checa se já foi avaliado
-              try {
-                const res = await api.get(`/avaliacoes/avaliar`, {
-                  params: {
-                    estabelecimentoId: item.estabelecimentoId,
-                    usuarioId: item.clienteId,
-                  },
-                });
-                setPedidoAvaliado(res.data && res.data.avaliado === true);
-              } catch {
-                setPedidoAvaliado(false);
-              }
-            }}>
-              <View style={[
-                styles.card,
-                isPedidoAtual && styles.cardAtual
-              ]}>
+            <TouchableOpacity 
+              activeOpacity={0.85}
+              onPress={async () => {
+                setSelectedPedido(item);
+                setModalVisible(true);
+                try {
+                  const res = await api.get(`/avaliacoes/avaliar`, {
+                    params: {
+                      estabelecimentoId: item.estabelecimentoId,
+                      usuarioId: item.clienteId,
+                    },
+                  });
+                  setPedidoAvaliado(res.data && res.data.avaliado === true);
+                } catch {
+                  setPedidoAvaliado(false);
+                }
+              }}
+            >
+              <View className={`bg-white rounded-2xl mb-4 border overflow-hidden shadow-sm ${
+                isPedidoAtual 
+                  ? 'border-red-600 border-2 bg-red-50' 
+                  : 'border-gray-100'
+              }`}>
                 {isPedidoAtual && (
-                  <View style={styles.badgeAtual}>
-                    <Text style={styles.badgeText}>PEDIDO EM ANDAMENTO</Text>
+                  <View className="bg-red-600 px-3 py-1 self-start ml-4 mt-2 rounded-full">
+                    <Text className="text-white text-xs font-bold tracking-wide">PEDIDO EM ANDAMENTO</Text>
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                
+                <View className="flex-row items-center p-4">
                   {item.estabelecimento?.imagem ? (
-                    <Image source={{ uri: item.estabelecimento.imagem }} style={styles.estabImage} />
+                    <Image 
+                      source={{ uri: item.estabelecimento.imagem }} 
+                      className="w-12 h-12 rounded-xl mr-3 bg-gray-100"
+                    />
                   ) : (
-                    <Image source={require('../assets/icon.png')} style={styles.estabImage} />
+                    <Image 
+                      source={require('../assets/icon.png')} 
+                      className="w-12 h-12 rounded-xl mr-3 bg-gray-100"
+                    />
                   )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.estabName}>{item.estabelecimento?.nome || 'Estabelecimento'}</Text>
-                    <Text style={styles.id}>Pedido ID: {item.id}</Text>
+                  
+                  <View className="flex-1">
+                    <Text className="font-bold text-base text-gray-800">{item.estabelecimento?.nome || 'Estabelecimento'}</Text>
+                    <Text className="font-semibold text-sm text-gray-600 mt-1">Pedido ID: {item.id}</Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.total, isPedidoAtual && styles.totalAtual]}>
+                  
+                  <View className="items-end">
+                    <Text className={`font-bold text-lg ${isPedidoAtual ? 'text-red-600' : 'text-gray-800'}`}>
                       R$ {totalPedido?.toFixed(2) ?? '--'}
                     </Text>
                   </View>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 16, marginBottom: 2 }}>
-                  <Text style={{ fontSize: 18, marginRight: 6 }}>{statusInfo.icon}</Text>
-                  <Text style={[styles.status, { color: statusInfo.color }]}>{statusInfo.label}</Text>
+                
+                <View className="flex-row items-center px-4 mb-2">
+                  <Ionicons name={statusInfo.icon} size={18} color={statusInfo.color} />
+                  <Text className="text-base font-semibold ml-2" style={{ color: statusInfo.color }}>
+                    {statusInfo.label}
+                  </Text>
                 </View>
                 
-                {/* Endereço de entrega */}
                 {item.enderecoEntrega && (
-                  <View style={styles.addressContainer}>
-                    <Text style={styles.addressIcon}>📍</Text>
-                    <Text style={styles.addressText} numberOfLines={1}>
+                  <View className="flex-row items-center mx-4 mb-2 px-2 py-1 bg-gray-50 rounded-lg">
+                    <Ionicons name="location-outline" size={14} color="#666" />
+                    <Text className="text-sm text-gray-600 ml-2 flex-1" numberOfLines={1}>
                       {item.enderecoEntrega}
                     </Text>
                   </View>
                 )}
                 
-                {/* Forma de pagamento */}
                 {(item.formaPagamento || item.formaPagamentoEntrega || item.paymentMethod) && (
-                  <View style={styles.paymentContainer}>
-                    <Text style={styles.paymentIcon}>
-                      {item.formaPagamentoEntrega ? '💳' : 
-                       item.formaPagamento === 'pix' ? '📱' :
-                       item.formaPagamento === 'cartao' ? '💳' :
-                       item.formaPagamento === 'dinheiro' ? '💵' :
-                       item.paymentMethod === 'pix' ? '📱' : '💳'}
-                    </Text>
-                    <Text style={styles.paymentText}>
-                      {item.formaPagamentoEntrega ? 
-                        `Pagar na entrega: ${item.formaPagamentoEntrega === 'dinheiro' ? 'Dinheiro' : 
-                         item.formaPagamentoEntrega === 'debito' ? 'Cartão de Débito' : 'Cartão de Crédito'}${item.precisaTroco ? ` (Troco para R$ ${item.trocoParaQuanto?.toFixed(2)})` : ''}` :
-                        item.formaPagamento === 'pix' ? 'PIX' :
-                        item.formaPagamento === 'cartao' ? 'Cartão de Crédito' :
-                        item.formaPagamento === 'dinheiro' ? 'Dinheiro' :
-                        item.paymentMethod === 'pix' ? 'PIX' : 
-                        item.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : 
-                        item.paymentMethod || 'Pagamento online'}
+                  <View className="flex-row items-center mx-4 mb-2 px-2 py-1 bg-gray-50 rounded-lg">
+                    <Ionicons name={getPaymentIcon(item)} size={14} color="#666" />
+                    <Text className="text-sm text-gray-600 ml-2 flex-1">
+                      {getPaymentText(item)}
                     </Text>
                   </View>
                 )}
                 
-                <Text style={styles.date}>Data: {new Date(item.createdAt).toLocaleString()}</Text>
+                <Text className="text-sm text-gray-500 px-4 pb-4">
+                  Data: {new Date(item.createdAt).toLocaleString()}
+                </Text>
               </View>
             </TouchableOpacity>
           );
         }}
-        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View className="flex-1 justify-center items-center py-20">
+            <Text className="text-gray-500 text-base">Nenhum pedido encontrado</Text>
+          </View>
+        }
       />
+      
       <Modal
         visible={modalVisible}
         animationType="slide"
         transparent={true}
         onRequestClose={() => setModalVisible(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Detalhes do Pedido</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-white rounded-t-3xl max-h-[85%] min-h-[60%]">
+            <View className="flex-row justify-between items-center px-5 py-4 border-b border-gray-200">
+              <Text className="text-xl font-bold text-gray-800">Detalhes do Pedido</Text>
+              <TouchableOpacity 
+                onPress={() => setModalVisible(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 justify-center items-center"
+              >
+                <Ionicons name="close" size={20} color="#666" />
               </TouchableOpacity>
             </View>
-            <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            
+            <ScrollView className="px-5 py-4" showsVerticalScrollIndicator={false}>
               {selectedPedido && (
                 <>
-                  <View style={styles.estabelecimentoInfo}>
+                  <View className="flex-row items-center mb-5 pb-4 border-b border-gray-200">
                     {selectedPedido.estabelecimento?.imagem ? (
-                      <Image source={{ uri: selectedPedido.estabelecimento.imagem }} style={styles.estabImageModal} />
+                      <Image 
+                        source={{ uri: selectedPedido.estabelecimento.imagem }} 
+                        className="w-16 h-16 rounded-2xl bg-gray-100"
+                      />
                     ) : (
-                      <Image source={require('../assets/icon.png')} style={styles.estabImageModal} />
+                      <Image 
+                        source={require('../assets/icon.png')} 
+                        className="w-16 h-16 rounded-2xl bg-gray-100"
+                      />
                     )}
-                    <View style={styles.estabelecimentoDetails}>
-                      <Text style={styles.estabelecimentoNome}>{selectedPedido.estabelecimento?.nome || 'Estabelecimento'}</Text>
-                      <Text style={styles.pedidoId}>Pedido #{selectedPedido.id}</Text>
+                    <View className="ml-3 flex-1">
+                      <Text className="text-lg font-bold text-gray-800">{selectedPedido.estabelecimento?.nome || 'Estabelecimento'}</Text>
+                      <Text className="text-sm text-gray-600">Pedido #{selectedPedido.id}</Text>
                     </View>
                   </View>
-                  <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Status: <Text style={{ color: statusMap[selectedPedido.status]?.color || '#888' }}>{statusMap[selectedPedido.status]?.label || selectedPedido.status}</Text></Text>
-                  <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Data: <Text style={{ fontWeight: 'normal' }}>{new Date(selectedPedido.createdAt).toLocaleString()}</Text></Text>
                   
-                  {/* Endereço de entrega */}
+                  <View className="mb-4">
+                    <Text className="font-semibold mb-1">
+                      Status: <Text style={{ color: statusMap[selectedPedido.status]?.color || '#888' }}>
+                        {statusMap[selectedPedido.status]?.label || selectedPedido.status}
+                      </Text>
+                    </Text>
+                    <Text className="font-semibold mb-4">
+                      Data: <Text className="font-normal">{new Date(selectedPedido.createdAt).toLocaleString()}</Text>
+                    </Text>
+                  </View>
+                  
                   {selectedPedido.enderecoEntrega && (
-                    <View style={styles.deliveryAddressInfo}>
-                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>📍 Endereço de Entrega:</Text>
-                      <Text style={{ marginLeft: 16, marginBottom: 8, fontSize: 16, lineHeight: 22 }}>
+                    <View className="bg-blue-50 rounded-xl p-3 mb-3 border border-blue-200">
+                      <Text className="font-bold text-sm text-red-600 mb-2">
+                        <Ionicons name="location" size={16} color="#ea1d2c" /> Endereço de Entrega:
+                      </Text>
+                      <Text className="ml-5 text-base leading-6 text-gray-700">
                         {selectedPedido.enderecoEntrega}
                       </Text>
                     </View>
                   )}
                   
-                  {/* Forma de pagamento online */}
                   {selectedPedido.paymentMethod && !selectedPedido.formaPagamentoEntrega && (
-                    <View style={styles.onlinePaymentInfo}>
-                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>💳 Pagamento Online:</Text>
-                      <Text style={{ marginLeft: 16, marginBottom: 8 }}>
-                        <Text style={{ fontWeight: 'bold' }}>Forma: </Text>
+                    <View className="bg-green-50 rounded-xl p-3 mb-3 border border-green-200">
+                      <Text className="font-bold text-sm text-red-600 mb-2">
+                        <Ionicons name="card" size={16} color="#ea1d2c" /> Pagamento Online:
+                      </Text>
+                      <Text className="ml-5 mb-2">
+                        <Text className="font-semibold">Forma: </Text>
                         <Text>
                           {selectedPedido.paymentMethod === 'pix' ? '📱 PIX' : 
                            selectedPedido.paymentMethod === 'credit_card' ? '💳 Cartão de Crédito' : 
@@ -308,12 +355,11 @@ const PedidoListScreen: React.FC = () => {
                         </Text>
                       </Text>
                       {selectedPedido.paymentStatus && (
-                        <Text style={{ marginLeft: 16, marginBottom: 8 }}>
-                          <Text style={{ fontWeight: 'bold' }}>Status: </Text>
-                          <Text style={{ 
+                        <Text className="ml-5">
+                          <Text className="font-semibold">Status: </Text>
+                          <Text className="font-bold" style={{
                             color: selectedPedido.paymentStatus === 'approved' ? '#2ecc71' : 
                                    selectedPedido.paymentStatus === 'pending' ? '#f39c12' : '#e74c3c',
-                            fontWeight: 'bold'
                           }}>
                             {selectedPedido.paymentStatus === 'approved' ? '✅ Aprovado' :
                              selectedPedido.paymentStatus === 'pending' ? '⏳ Pendente' :
@@ -324,82 +370,85 @@ const PedidoListScreen: React.FC = () => {
                     </View>
                   )}
                   
-                  {selectedPedido.formaPagamento && (
-                    <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Forma de Pagamento: <Text style={{ fontWeight: 'normal' }}>{selectedPedido.formaPagamento}</Text></Text>
-                  )}
-                  
-                  {/* Informações de pagamento na entrega */}
                   {selectedPedido.formaPagamentoEntrega && (
-                    <View style={styles.deliveryPaymentInfo}>
-                      <Text style={{ fontWeight: 'bold', marginBottom: 4, color: '#e5293e' }}>💳 Pagamento na Entrega:</Text>
-                      <Text style={{ marginLeft: 16, marginBottom: 2 }}>
-                        <Text style={{ fontWeight: 'bold' }}>Forma: </Text>
-                        <Text>{selectedPedido.formaPagamentoEntrega === 'dinheiro' ? '💵 Dinheiro' : 
-                               selectedPedido.formaPagamentoEntrega === 'debito' ? '💳 Cartão de Débito' : 
-                               '💳 Cartão de Crédito'}</Text>
+                    <View className="bg-red-50 rounded-xl p-3 mb-3 border border-red-200">
+                      <Text className="font-bold text-sm text-red-600 mb-2">
+                        <Ionicons name="card" size={16} color="#ea1d2c" /> Pagamento na Entrega:
                       </Text>
-                      
+                      <Text className="ml-5 mb-1">
+                        <Text className="font-semibold">Forma: </Text>
+                        <Text>
+                          {selectedPedido.formaPagamentoEntrega === 'dinheiro' ? '💵 Dinheiro' : 
+                           selectedPedido.formaPagamentoEntrega === 'debito' ? '💳 Cartão de Débito' : 
+                           '💳 Cartão de Crédito'}
+                        </Text>
+                      </Text>
                       {selectedPedido.precisaTroco && (
-                        <Text style={{ marginLeft: 16, marginBottom: 2 }}>
-                          <Text style={{ fontWeight: 'bold' }}>Troco: </Text>
+                        <Text className="ml-5 mb-1">
+                          <Text className="font-semibold">Troco: </Text>
                           <Text>Sim, para R$ {selectedPedido.trocoParaQuanto?.toFixed(2)}</Text>
                         </Text>
                       )}
-                      
                       {selectedPedido.precisaTroco === false && (
-                        <Text style={{ marginLeft: 16, marginBottom: 2 }}>
-                          <Text style={{ fontWeight: 'bold' }}>Troco: </Text>
+                        <Text className="ml-5 mb-1">
+                          <Text className="font-semibold">Troco: </Text>
                           <Text>Não precisa</Text>
                         </Text>
                       )}
                     </View>
                   )}
-                  <Text style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 16 }}>Itens do pedido:</Text>
+                  
+                  <Text className="font-bold text-base mb-3">Itens do pedido:</Text>
                   {selectedPedido.itens && selectedPedido.itens.length > 0 ? (
                     selectedPedido.itens.map((item, idx) => {
                       const itemTotal = item.precoUnitario * item.quantidade;
                       return (
-                        <View key={idx} style={styles.itemPedido}>
-                          <View style={styles.itemInfo}>
-                            <Text style={styles.itemNome}>{item.quantidade}x {item.produto?.nome || 'Produto'}</Text>
-                            <Text style={styles.itemPreco}>R$ {item.precoUnitario?.toFixed(2)}</Text>
+                        <View key={idx} className="flex-row justify-between items-center py-2 px-3 bg-gray-50 rounded-lg mb-2">
+                          <View className="flex-1">
+                            <Text className="text-base font-medium text-gray-800 mb-1">
+                              {item.quantidade}x {item.produto?.nome || 'Produto'}
+                            </Text>
+                            <Text className="text-sm text-gray-600">R$ {item.precoUnitario?.toFixed(2)}</Text>
                           </View>
-                          <Text style={styles.itemTotal}>R$ {itemTotal.toFixed(2)}</Text>
+                          <Text className="text-base font-bold text-red-600">
+                            R$ {itemTotal.toFixed(2)}
+                          </Text>
                         </View>
                       );
                     })
                   ) : (
-                    <Text style={{ marginLeft: 12, marginBottom: 2 }}>Produtos não disponíveis</Text>
+                    <Text className="ml-3 mb-2 text-gray-600">Produtos não disponíveis</Text>
                   )}
                   
-                  {/* Cálculo do total correto */}
                   {selectedPedido.itens && selectedPedido.itens.length > 0 && (
-                    <View style={styles.totalContainer}>
-                      <View style={styles.totalLine}>
-                        <Text style={styles.totalLabel}>Subtotal:</Text>
-                        <Text style={styles.totalValue}>
+                    <View className="bg-gray-50 rounded-xl p-4 mt-4 border border-gray-200">
+                      <View className="flex-row justify-between items-center mb-2">
+                        <Text className="text-base text-gray-600">Subtotal:</Text>
+                        <Text className="text-base font-medium text-gray-800">
                           R$ {selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0).toFixed(2)}
                         </Text>
                       </View>
-                      <View style={styles.totalLine}>
-                        <Text style={styles.totalLabel}>Taxa de entrega:</Text>
-                        <Text style={styles.totalValue}>R$ {(selectedPedido.taxaEntrega || 0).toFixed(2)}</Text>
+                      <View className="flex-row justify-between items-center mb-2">
+                        <Text className="text-base text-gray-600">Taxa de entrega:</Text>
+                        <Text className="text-base font-medium text-gray-800">
+                          R$ {(selectedPedido.taxaEntrega || 0).toFixed(2)}
+                        </Text>
                       </View>
-                      <View style={[styles.totalLine, styles.totalFinal]}>
-                        <Text style={styles.totalFinalLabel}>Total:</Text>
-                        <Text style={styles.totalFinalValue}>
+                      <View className="flex-row justify-between items-center pt-2 mt-2 border-t border-gray-300">
+                        <Text className="text-lg font-bold text-gray-800">Total:</Text>
+                        <Text className="text-lg font-bold text-red-600">
                           R$ {(selectedPedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + (selectedPedido.taxaEntrega || 0)).toFixed(2)}
                         </Text>
                       </View>
                     </View>
                   )}
-                  {/* Avaliação - somente para pedidos entregues */}
+                  
                   {selectedPedido.status === 'entregue' && (
-                    <View style={styles.avaliacaoContainer}>
-                      <Text style={styles.avaliacaoTitle}>Avalie seu pedido:</Text>
+                    <View className="bg-gray-50 rounded-xl p-4 mt-4 border border-gray-200">
+                      <Text className="text-lg font-bold text-gray-800 mb-3">Avalie seu pedido:</Text>
                       {pedidoAvaliado ? (
-                        <View style={styles.avaliacaoJaFeita}>
-                          <Text style={styles.avaliacaoJaFeitaText}>✅ Você já avaliou este pedido.</Text>
+                        <View className="bg-green-100 rounded-lg p-3 items-center">
+                          <Text className="text-green-800 font-bold text-base">✅ Você já avaliou este pedido.</Text>
                         </View>
                       ) : (
                         <EvaluationForm onSubmit={async (nota, comentario) => {
@@ -420,22 +469,19 @@ const PedidoListScreen: React.FC = () => {
                     </View>
                   )}
                   
-                  {/* Status específico para pedidos em andamento */}
-                  {selectedPedido.status === 'pendente' && (
-                    <View style={styles.statusContainer}>
-                      <Text style={styles.statusText}>⏳ Aguardando confirmação do estabelecimento!</Text>
-                    </View>
-                  )}
-                  
-                  {selectedPedido.status === 'preparo' && (
-                    <View style={styles.statusContainer}>
-                      <Text style={styles.statusText}>🍳 Seu pedido está sendo preparado!</Text>
+                  {(selectedPedido.status === 'pendente' || selectedPedido.status === 'preparo') && (
+                    <View className="bg-blue-50 rounded-xl p-4 mt-4 items-center border border-blue-200">
+                      <Text className="text-base font-bold text-blue-700 text-center">
+                        {selectedPedido.status === 'pendente' 
+                          ? '⏳ Aguardando confirmação do estabelecimento!' 
+                          : '🍳 Seu pedido está sendo preparado!'}
+                      </Text>
                     </View>
                   )}
                   
                   {selectedPedido.status === 'entregue' && (
-                    <View style={styles.statusContainer}>
-                      <Text style={styles.statusText}>✅ Pedido entregue com sucesso!</Text>
+                    <View className="bg-green-50 rounded-xl p-4 mt-4 items-center border border-green-200">
+                      <Text className="text-base font-bold text-green-700 text-center">✅ Pedido entregue com sucesso!</Text>
                     </View>
                   )}
                 </>
@@ -448,379 +494,5 @@ const PedidoListScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  estabImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    margin: 10,
-    backgroundColor: '#eee',
-  },
-  estabImageModal: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: '#eee',
-  },
-  estabName: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    color: '#222',
-    marginTop: 8,
-    marginLeft: 0,
-  },
-  list: {
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: '#e5293e',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 0,
-    marginBottom: 18,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#f1f1f1',
-  },
-  cardAtual: {
-    borderColor: '#e5293e',
-    borderWidth: 2,
-    backgroundColor: '#fff5f5',
-  },
-  badgeAtual: {
-    backgroundColor: '#e5293e',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    alignSelf: 'flex-start',
-    marginLeft: 16,
-    marginTop: 8,
-    borderRadius: 12,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  total: {
-    fontWeight: 'bold',
-    color: '#222',
-    fontSize: 16,
-  },
-  totalAtual: {
-    color: '#e5293e',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  id: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginTop: 14,
-    marginLeft: 16,
-    marginBottom: 2,
-    color: '#222',
-  },
-  status: {
-    fontSize: 15,
-    marginLeft: 16,
-    marginBottom: 2,
-    fontWeight: 'bold',
-  },
-  date: {
-    fontSize: 14,
-    color: '#888',
-    marginLeft: 16,
-    marginBottom: 14,
-  },
-  button: {
-    backgroundColor: '#e5293e',
-    paddingVertical: 12,
-    borderRadius: 0,
-    alignItems: 'center',
-    width: '100%',
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  // Estilos para detalhes do pedido (estilo iFood)
-  itemPedido: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  itemInfo: {
-    flex: 1,
-  },
-  itemNome: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 2,
-  },
-  itemPreco: {
-    fontSize: 14,
-    color: '#666',
-  },
-  itemTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#e5293e',
-  },
-  totalContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  totalLine: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  totalLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  totalValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-  },
-  totalFinal: {
-    borderTopWidth: 1,
-    borderTopColor: '#dee2e6',
-    paddingTop: 8,
-    marginTop: 8,
-    marginBottom: 0,
-  },
-  totalFinalLabel: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  totalFinalValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#e5293e',
-  },
-  avaliacaoContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  avaliacaoTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  avaliacaoJaFeita: {
-    backgroundColor: '#d4edda',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  avaliacaoJaFeitaText: {
-    color: '#155724',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  statusContainer: {
-    backgroundColor: '#e3f2fd',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#bbdefb',
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1976d2',
-    textAlign: 'center',
-  },
-  // Estilos do modal (estilo iFood)
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '85%',
-    minHeight: '60%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f5f5f5',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#666',
-    fontWeight: 'bold',
-  },
-  modalContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  estabelecimentoInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  estabelecimentoDetails: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  estabelecimentoNome: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  pedidoId: {
-    fontSize: 14,
-    color: '#666',
-  },
-  
-  // Estilos para informações de pagamento na entrega
-  deliveryPaymentInfo: {
-    backgroundColor: '#fff5f5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  
-  // Estilos para endereço de entrega
-  deliveryAddressInfo: {
-    backgroundColor: '#f0f8ff',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#b3d9ff',
-  },
-  
-  // Estilos para pagamento online
-  onlinePaymentInfo: {
-    backgroundColor: '#f0fff0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#c3e6c3',
-  },
-  
-  // Estilos para lista de pedidos
-  addressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 16,
-    marginBottom: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 6,
-    marginRight: 16,
-  },
-  addressIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  addressText: {
-    fontSize: 13,
-    color: '#666',
-    flex: 1,
-  },
-  
-  paymentContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 16,
-    marginBottom: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 6,
-    marginRight: 16,
-  },
-  paymentIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  paymentText: {
-    fontSize: 13,
-    color: '#666',
-    flex: 1,
-  },
-});
-
 export default PedidoListScreen;
+

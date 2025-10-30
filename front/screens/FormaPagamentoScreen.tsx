@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Modal, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { getCurrentUser } from '../services/currentUserService';
 import { getCartoes, Cartao, adicionarCartao } from '../services/cartaoService';
@@ -114,6 +115,11 @@ const FormaPagamentoScreen: React.FC = () => {
     }
   };
 
+  const calculateTotal = () => {
+    const subtotal = cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0);
+    return subtotal + taxaEntrega;
+  };
+
   const handleConfirmDeliveryPayment = () => {
     if (!formaPagamentoEntrega) {
       Alert.alert('Erro', 'Selecione uma forma de pagamento');
@@ -173,63 +179,66 @@ const FormaPagamentoScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View className="flex-1 bg-white">
       {/* Header */}
-      <View style={styles.header}>
+      <View className="flex-row justify-between items-center px-4 py-3 bg-white border-b border-gray-200">
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backButton}>←</Text>
+          <Ionicons name="arrow-back" size={24} color="#ea1d2c" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>SACOLA</Text>
-        <View style={styles.headerSpacer} />
+        <Text className="text-lg font-bold text-gray-800">SACOLA</Text>
+        <View className="w-6" />
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Forma de pagamento */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Forma de pagamento</Text>
+        <View className="px-4 py-4 bg-white border-b border-gray-200">
+          <Text className="text-lg font-bold text-gray-800 mb-3">Forma de pagamento</Text>
           
-          <View style={styles.paymentOptions}>
+          <View className="flex-row gap-3">
             <TouchableOpacity 
-              style={[
-                styles.paymentOption,
-                formaPagamento === 'dinheiro' && styles.paymentOptionSelected
-              ]} 
+              className={`flex-1 rounded-xl py-4 px-3 items-center border ${
+                formaPagamento === 'dinheiro' 
+                  ? 'bg-red-600 border-red-600' 
+                  : 'bg-gray-50 border-gray-200'
+              }`}
               onPress={() => handlePaymentMethodSelect('dinheiro')}
+              activeOpacity={0.8}
             >
-              <Text style={[
-                styles.paymentOptionText,
-                formaPagamento === 'dinheiro' && styles.paymentOptionTextSelected
-              ]}>
+              <Text className={`text-sm font-semibold text-center ${
+                formaPagamento === 'dinheiro' ? 'text-white' : 'text-gray-800'
+              }`}>
                 💵 Pagar na entrega
               </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[
-                styles.paymentOption,
-                formaPagamento === 'cartao' && styles.paymentOptionSelected
-              ]} 
+              className={`flex-1 rounded-xl py-4 px-3 items-center border ${
+                formaPagamento === 'cartao' 
+                  ? 'bg-red-600 border-red-600' 
+                  : 'bg-gray-50 border-gray-200'
+              }`}
               onPress={() => handlePaymentMethodSelect('cartao')}
+              activeOpacity={0.8}
             >
-              <Text style={[
-                styles.paymentOptionText,
-                formaPagamento === 'cartao' && styles.paymentOptionTextSelected
-              ]}>
+              <Text className={`text-sm font-semibold text-center ${
+                formaPagamento === 'cartao' ? 'text-white' : 'text-gray-800'
+              }`}>
                 💳 Cartão
               </Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={[
-                styles.paymentOption,
-                formaPagamento === 'pix' && styles.paymentOptionSelected
-              ]} 
+              className={`flex-1 rounded-xl py-4 px-3 items-center border ${
+                formaPagamento === 'pix' 
+                  ? 'bg-red-600 border-red-600' 
+                  : 'bg-gray-50 border-gray-200'
+              }`}
               onPress={() => handlePaymentMethodSelect('pix')}
+              activeOpacity={0.8}
             >
-              <Text style={[
-                styles.paymentOptionText,
-                formaPagamento === 'pix' && styles.paymentOptionTextSelected
-              ]}>
+              <Text className={`text-sm font-semibold text-center ${
+                formaPagamento === 'pix' ? 'text-white' : 'text-gray-800'
+              }`}>
                 📱 PIX
               </Text>
             </TouchableOpacity>
@@ -268,73 +277,84 @@ const FormaPagamentoScreen: React.FC = () => {
         </View> */}
 
         {/* Resumo de valores */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Resumo de valores</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>R$ {cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0).toFixed(2)}</Text>
+        <View className="px-4 py-4 bg-white border-b border-gray-200">
+          <Text className="text-lg font-bold text-gray-800 mb-3">Resumo de valores</Text>
+          <View className="flex-row justify-between items-center py-1.5">
+            <Text className="text-base text-gray-600 font-medium">Subtotal</Text>
+            <Text className="text-base text-gray-800 font-semibold">R$ {cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0).toFixed(2)}</Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Taxa de entrega</Text>
-            <Text style={styles.summaryValue}>R$ {taxaEntrega.toFixed(2)}</Text>
+          <View className="flex-row justify-between items-center py-1.5">
+            <Text className="text-base text-gray-600 font-medium">Taxa de entrega</Text>
+            <Text className="text-base text-gray-800 font-semibold">R$ {taxaEntrega.toFixed(2)}</Text>
           </View>
-          <View style={styles.summaryRowFinal}>
-            <Text style={styles.summaryLabelFinal}>Total</Text>
-            <Text style={styles.summaryValueFinal}>R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}</Text>
+          <View className="flex-row justify-between items-center py-3 mt-2 border-t border-gray-300">
+            <Text className="text-lg font-bold text-gray-800">Total</Text>
+            <Text className="text-lg font-bold text-red-600">R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}</Text>
           </View>
-          {/* <View style={styles.discountRow}>
-            <Text style={styles.discountText}>Aplique seu cupom e pague</Text>
-            <View style={styles.discountValue}>
-              <Text style={styles.discountIcon}>💎</Text>
-              <Text style={styles.discountAmount}>R$ 23,16</Text>
-            </View>
-          </View> */}
         </View>
       </ScrollView>
 
       {/* Footer */}
-      <View style={styles.footer}>
+      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 pb-8">
         <TouchableOpacity
-          style={styles.reviewButton}
+          className="bg-red-600 rounded-xl py-4 mx-4 my-4 items-center"
           onPress={handleContinue}
+          activeOpacity={0.8}
         >
-          <Text style={styles.reviewButtonText}>Revisar pedido • R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}</Text>
+          <Text className="text-white text-base font-bold">
+            Revisar pedido • R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}
+          </Text>
         </TouchableOpacity>
       </View>
 
       {/* Modal de Pagamento na Entrega */}
       <Modal visible={showDeliveryPaymentModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Pagamento na Entrega</Text>
-            <Text style={styles.modalSubtitle}>
+        <View className="flex-1 bg-black/40 justify-center items-center">
+          <View className="bg-white rounded-2xl p-6 w-[90%] max-h-[80%]">
+            <Text className="font-bold text-lg mb-2 text-red-600">Pagamento na Entrega</Text>
+            <Text className="text-sm text-gray-600 mb-5">
               Selecione como deseja pagar na entrega:
             </Text>
             
-            <View style={styles.deliveryPaymentOptions}>
+            <View className="mb-5">
               <TouchableOpacity 
-                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'dinheiro' && styles.deliveryPaymentOptionSelected]}
+                className={`bg-gray-50 border rounded-xl py-4 px-5 mb-3 items-center ${
+                  formaPagamentoEntrega === 'dinheiro' ? 'bg-red-600 border-red-600' : 'border-gray-200'
+                }`}
                 onPress={() => setFormaPagamentoEntrega('dinheiro')}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'dinheiro' && styles.deliveryPaymentTextSelected]}>
+                <Text className={`text-base font-semibold ${
+                  formaPagamentoEntrega === 'dinheiro' ? 'text-white' : 'text-gray-800'
+                }`}>
                   💵 Dinheiro
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'debito' && styles.deliveryPaymentOptionSelected]}
+                className={`bg-gray-50 border rounded-xl py-4 px-5 mb-3 items-center ${
+                  formaPagamentoEntrega === 'debito' ? 'bg-red-600 border-red-600' : 'border-gray-200'
+                }`}
                 onPress={() => setFormaPagamentoEntrega('debito')}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'debito' && styles.deliveryPaymentTextSelected]}>
+                <Text className={`text-base font-semibold ${
+                  formaPagamentoEntrega === 'debito' ? 'text-white' : 'text-gray-800'
+                }`}>
                   💳 Cartão de Débito
                 </Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.deliveryPaymentOption, formaPagamentoEntrega === 'credito' && styles.deliveryPaymentOptionSelected]}
+                className={`bg-gray-50 border rounded-xl py-4 px-5 mb-3 items-center ${
+                  formaPagamentoEntrega === 'credito' ? 'bg-red-600 border-red-600' : 'border-gray-200'
+                }`}
                 onPress={() => setFormaPagamentoEntrega('credito')}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.deliveryPaymentText, formaPagamentoEntrega === 'credito' && styles.deliveryPaymentTextSelected]}>
+                <Text className={`text-base font-semibold ${
+                  formaPagamentoEntrega === 'credito' ? 'text-white' : 'text-gray-800'
+                }`}>
                   💳 Cartão de Crédito
                 </Text>
               </TouchableOpacity>
@@ -342,67 +362,77 @@ const FormaPagamentoScreen: React.FC = () => {
 
             {/* Opções de troco para dinheiro */}
             {formaPagamentoEntrega === 'dinheiro' && (
-              <View style={styles.trocoSection}>
-                <Text style={styles.trocoTitle}>Precisa de troco?</Text>
+              <View className="mb-5">
+                <Text className="text-base font-semibold mb-3 text-gray-800">Precisa de troco?</Text>
                 
                 <TouchableOpacity 
-                  style={[styles.trocoOption, precisaTroco && styles.trocoOptionSelected]}
+                  className={`bg-gray-50 border rounded-lg py-3 px-4 mb-2 items-center ${
+                    precisaTroco ? 'bg-red-600 border-red-600' : 'border-gray-200'
+                  }`}
                   onPress={() => setPrecisaTroco(true)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.trocoText, precisaTroco && styles.trocoTextSelected]}>Sim</Text>
+                  <Text className={`text-sm font-semibold ${
+                    precisaTroco ? 'text-white' : 'text-gray-800'
+                  }`}>Sim</Text>
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  style={[styles.trocoOption, !precisaTroco && styles.trocoOptionSelected]}
+                  className={`bg-gray-50 border rounded-lg py-3 px-4 mb-2 items-center ${
+                    !precisaTroco ? 'bg-red-600 border-red-600' : 'border-gray-200'
+                  }`}
                   onPress={() => setPrecisaTroco(false)}
+                  activeOpacity={0.8}
                 >
-                  <Text style={[styles.trocoText, !precisaTroco && styles.trocoTextSelected]}>Não</Text>
+                  <Text className={`text-sm font-semibold ${
+                    !precisaTroco ? 'text-white' : 'text-gray-800'
+                  }`}>Não</Text>
                 </TouchableOpacity>
 
                 {precisaTroco && (
-                  <View style={styles.trocoInputSection}>
-                    <Text style={styles.trocoInputLabel}>Troco para quanto?</Text>
+                  <View className="mt-3">
+                    <Text className="text-sm text-gray-600 mb-2">Troco para quanto?</Text>
                     <TextInput
-                      style={styles.trocoInput}
+                      className="border border-gray-200 rounded-lg py-3 px-4 text-base bg-white mb-2 text-gray-800"
                       placeholder="Ex: 50.00"
+                      placeholderTextColor="#aaa"
                       value={trocoParaQuanto}
                       onChangeText={setTrocoParaQuanto}
                       keyboardType="numeric"
                     />
-                    <Text style={styles.trocoTotalText}>
-                      Total do pedido: R$ 27,89
+                    <Text className="text-xs text-gray-600">
+                      Total do pedido: R$ {calculateTotal().toFixed(2)}
                     </Text>
                   </View>
                 )}
               </View>
             )}
 
-            <View style={styles.modalButtons}>
+            <View className="flex-row justify-between mt-4 gap-2">
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
+                className="flex-1 bg-gray-50 border border-gray-200 py-3 rounded-lg items-center justify-center"
                 onPress={() => {
                   setFormaPagamentoEntrega('');
                   setPrecisaTroco(false);
                   setTrocoParaQuanto('');
                   setShowDeliveryPaymentModal(false);
                 }}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonTextSecondary}>Cancelar</Text>
+                <Text className="text-gray-600 text-base font-medium">Cancelar</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[
-                  styles.modalButton, 
-                  styles.modalButtonPrimary,
-                  !formaPagamentoEntrega && { opacity: 0.5 }
-                ]}
+                className={`flex-1 py-3 rounded-lg items-center justify-center ${
+                  formaPagamentoEntrega ? 'bg-red-600' : 'bg-gray-300'
+                }`}
                 onPress={handleConfirmDeliveryPayment}
                 disabled={!formaPagamentoEntrega}
+                activeOpacity={0.8}
               >
-                <Text style={[
-                  styles.modalButtonTextPrimary,
-                  !formaPagamentoEntrega && { color: '#999' }
-                ]}>
+                <Text className={`text-base font-bold ${
+                  formaPagamentoEntrega ? 'text-white' : 'text-gray-600'
+                }`}>
                   {formaPagamentoEntrega ? 'Confirmar' : 'Selecione uma opção'}
                 </Text>
               </TouchableOpacity>
@@ -413,83 +443,85 @@ const FormaPagamentoScreen: React.FC = () => {
 
       {/* Modal de Seleção de Cartões Salvos */}
       <Modal visible={showCardSelectionModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecionar Cartão</Text>
+        <View className="flex-1 bg-black/40 justify-center items-center">
+          <View className="bg-white rounded-2xl p-6 w-[90%] max-h-[80%]">
+            <Text className="font-bold text-lg mb-4 text-red-600">Selecionar Cartão</Text>
             
             {cartoesSalvos.length > 0 ? (
               <>
                 {cartoesSalvos.map((item) => (
                   <TouchableOpacity
                     key={item.id}
-                    style={[
-                      styles.cartaoOption,
-                      cartaoSelecionado?.id === item.id && styles.cartaoOptionSelected
-                    ]}
+                    className={`flex-row justify-between items-center p-4 mb-2 rounded-lg border ${
+                      cartaoSelecionado?.id === item.id 
+                        ? 'border-red-600 bg-red-50' 
+                        : 'border-gray-200 bg-gray-50'
+                    }`}
                     onPress={() => setCartaoSelecionado(item)}
+                    activeOpacity={0.8}
                   >
-                    <View style={styles.cartaoOptionInfo}>
-                      <Text style={styles.cartaoOptionBandeira}>{item.paymentMethodId.toUpperCase()}</Text>
-                      <Text style={styles.cartaoOptionNumero}>****{item.lastFourDigits}</Text>
-                      <Text style={styles.cartaoOptionValidade}>
+                    <View className="flex-1">
+                      <Text className="text-base font-bold text-gray-800">{item.paymentMethodId.toUpperCase()}</Text>
+                      <Text className="text-sm text-gray-600 mt-0.5">****{item.lastFourDigits}</Text>
+                      <Text className="text-xs text-gray-500 mt-0.5">
                         {item.expirationMonth.toString().padStart(2, '0')}/{item.expirationYear.toString().slice(-2)}
                       </Text>
                     </View>
                     {item.isDefault && (
-                      <Text style={styles.cartaoOptionPadrao}>PADRÃO</Text>
+                      <Text className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">PADRÃO</Text>
                     )}
                   </TouchableOpacity>
                 ))}
                 
                 {/* Campo CVV para cartão salvo */}
                 {cartaoSelecionado && (
-                  <View style={styles.cvvSection}>
-                    <Text style={styles.cvvTitle}>Código de Segurança (CVV)</Text>
+                  <View className="mt-4">
+                    <Text className="text-base font-bold mb-2 text-gray-800">Código de Segurança (CVV)</Text>
                     <TextInput
-                      style={styles.cvvInput}
+                      className="border border-gray-300 rounded-lg p-3 text-base bg-white mb-2 text-gray-800"
                       placeholder="Digite o CVV"
+                      placeholderTextColor="#aaa"
                       value={savedCardCvv}
                       onChangeText={setSavedCardCvv}
                       keyboardType="numeric"
                       maxLength={4}
                       secureTextEntry
                     />
-                    <Text style={styles.cvvDescription}>
+                    <Text className="text-xs text-gray-600">
                       Por segurança, precisamos do CVV para processar o pagamento
                     </Text>
                   </View>
                 )}
               </>
             ) : (
-              <View style={styles.noCardsContainer}>
-                <Text style={styles.noCardsText}>
+              <View className="p-5 items-center">
+                <Text className="text-gray-600 text-base mb-4">
                   Nenhum cartão salvo encontrado
                 </Text>
-                <Text style={styles.noCardsSubtext}>
+                <Text className="text-gray-400 text-sm text-center">
                   Adicione um cartão para facilitar seus pagamentos futuros
                 </Text>
               </View>
             )}
             
-            <View style={styles.modalButtons}>
+            <View className="flex-row justify-between mt-4 gap-2">
               <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSecondary]}
+                className="flex-1 bg-gray-50 border border-gray-200 py-3 rounded-lg items-center justify-center"
                 onPress={() => {
                   setUsarCartaoSalvo(false);
                   setShowCardSelectionModal(false);
                   setShowCardModal(true);
                 }}
+                activeOpacity={0.8}
               >
-                <Text style={styles.modalButtonTextSecondary}>Adicionar Novo Cartão</Text>
+                <Text className="text-gray-600 text-base font-medium">Adicionar Novo Cartão</Text>
               </TouchableOpacity>
               
               {cartaoSelecionado && (
                 <TouchableOpacity
-                  style={[
-                    styles.modalButton, 
-                    styles.modalButtonPrimary,
-                    !savedCardCvv && { opacity: 0.5 }
-                  ]}
+                  className={`flex-1 py-3 rounded-lg items-center justify-center ${
+                    savedCardCvv ? 'bg-red-600' : 'bg-gray-300'
+                  }`}
                   onPress={() => {
                     if (!savedCardCvv) {
                       Alert.alert('Erro', 'Digite o CVV do cartão');
@@ -500,8 +532,9 @@ const FormaPagamentoScreen: React.FC = () => {
                     setShowCardSelectionModal(false);
                   }}
                   disabled={!savedCardCvv}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.modalButtonTextPrimary}>
+                  <Text className="text-white text-base font-bold">
                     Usar Cartão Selecionado
                   </Text>
                 </TouchableOpacity>
@@ -509,7 +542,7 @@ const FormaPagamentoScreen: React.FC = () => {
             </View>
             
             <TouchableOpacity 
-              style={styles.cancelButton}
+              className="mt-2 self-center"
               onPress={() => {
                 setShowCardSelectionModal(false);
                 if (!savedCardCvv) {
@@ -517,8 +550,9 @@ const FormaPagamentoScreen: React.FC = () => {
                   setCartaoSelecionado(null);
                 }
               }}
+              activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
+              <Text className="text-red-600 font-bold">Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -526,36 +560,40 @@ const FormaPagamentoScreen: React.FC = () => {
 
       {/* Modal de Novo Cartão */}
       <Modal visible={showCardModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Pagamento com Cartão</Text>
+        <View className="flex-1 bg-black/40 justify-center items-center">
+          <View className="bg-white rounded-2xl p-6 w-[90%] max-h-[80%]">
+            <Text className="font-bold text-lg mb-4 text-red-600">Pagamento com Cartão</Text>
             
             <TextInput 
-              style={styles.modalInput} 
+              className="border border-gray-200 rounded-lg py-3 px-4 text-base bg-gray-50 mb-3 text-gray-800"
               placeholder="Número do cartão" 
+              placeholderTextColor="#aaa"
               keyboardType="numeric" 
               value={cardNumber} 
               onChangeText={setCardNumber} 
               maxLength={19} 
             />
             <TextInput 
-              style={styles.modalInput} 
-              placeholder="Nome impresso no cartão" 
+              className="border border-gray-200 rounded-lg py-3 px-4 text-base bg-gray-50 mb-3 text-gray-800"
+              placeholder="Nome impresso no cartão"
+              placeholderTextColor="#aaa"
               value={cardName} 
               onChangeText={setCardName} 
             />
-            <View style={styles.inputRow}>
+            <View className="flex-row gap-3">
               <TextInput 
-                style={[styles.modalInput, styles.inputHalf]} 
-                placeholder="Validade (MM/AA)" 
+                className="flex-1 border border-gray-200 rounded-lg py-3 px-4 text-base bg-gray-50 mb-3 text-gray-800"
+                placeholder="Validade (MM/AA)"
+                placeholderTextColor="#aaa"
                 value={cardExp} 
                 onChangeText={(text) => setCardExp(formatCardExp(text))} 
                 maxLength={5}
                 keyboardType="numeric"
               />
               <TextInput 
-                style={[styles.modalInput, styles.inputHalf]} 
-                placeholder="CVV" 
+                className="flex-1 border border-gray-200 rounded-lg py-3 px-4 text-base bg-gray-50 mb-3 text-gray-800"
+                placeholder="CVV"
+                placeholderTextColor="#aaa"
                 value={cardCvv} 
                 onChangeText={setCardCvv} 
                 maxLength={4} 
@@ -564,18 +602,15 @@ const FormaPagamentoScreen: React.FC = () => {
             </View>
             
             {cardError ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{cardError}</Text>
+              <View className="bg-red-50 border border-red-200 rounded-lg py-2 px-3 mb-3">
+                <Text className="text-red-600 text-sm font-medium">{cardError}</Text>
               </View>
             ) : null}
             
             <TouchableOpacity 
-              style={[
-                styles.modalButton, 
-                styles.modalButtonPrimary, 
-                { marginTop: 12 },
-                savingCard && { opacity: 0.7 }
-              ]} 
+              className={`flex-1 mt-3 py-3 rounded-lg items-center justify-center ${
+                savingCard ? 'bg-red-400' : 'bg-red-600'
+              }`}
               onPress={async () => {
                 if (!cardNumber || !cardName || !cardExp || !cardCvv) {
                   setCardError('Preencha todos os campos');
@@ -638,12 +673,12 @@ const FormaPagamentoScreen: React.FC = () => {
               {savingCard ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.modalButtonTextPrimary}>Confirmar Cartão</Text>
+                <Text className="text-white text-base font-bold">Confirmar Cartão</Text>
               )}
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.cancelButton}
+              className="mt-2 self-center"
               onPress={() => {
                 setShowCardModal(false);
                 setCardError('');
@@ -653,8 +688,9 @@ const FormaPagamentoScreen: React.FC = () => {
                 setCardCvv('');
                 setUsarCartaoSalvo(false);
               }}
+              activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>Cancelar</Text>
+              <Text className="text-red-600 font-bold">Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -662,487 +698,5 @@ const FormaPagamentoScreen: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  backButton: {
-    fontSize: 24,
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  headerSpacer: {
-    width: 24,
-  },
-  scrollView: {
-    flex: 1,
-    paddingBottom: 100,
-  },
-  section: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  paymentOptions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  paymentOption: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  paymentOptionSelected: {
-    backgroundColor: '#e5293e',
-    borderColor: '#e5293e',
-  },
-  paymentOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  paymentOptionTextSelected: {
-    color: '#fff',
-  },
-  couponSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  couponInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  couponIcon: {
-    fontSize: 20,
-    marginRight: 12,
-  },
-  couponDetails: {
-    flex: 1,
-  },
-  couponTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  couponDescription: {
-    fontSize: 14,
-    color: '#8B5CF6',
-  },
-  addCouponButton: {
-    fontSize: 16,
-    color: '#e5293e',
-    fontWeight: '600',
-  },
-  donationSection: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  donationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  donationTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  helpIcon: {
-    fontSize: 16,
-    color: '#666',
-    backgroundColor: '#f0f0f0',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  donationDescription: {
-    fontSize: 12,
-    color: '#666',
-    fontStyle: 'italic',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  summaryRowFinal: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    marginTop: 8,
-  },
-  summaryLabel: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '600',
-  },
-  summaryLabelFinal: {
-    fontSize: 18,
-    color: '#333',
-    fontWeight: 'bold',
-  },
-  summaryValueFinal: {
-    fontSize: 18,
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
-  discountRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    marginTop: 8,
-  },
-  discountText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  discountValue: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  discountIcon: {
-    fontSize: 16,
-    marginRight: 4,
-  },
-  discountAmount: {
-    fontSize: 16,
-    color: '#8B5CF6',
-    fontWeight: 'bold',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
-    paddingBottom: 34,
-  },
-  reviewButton: {
-    backgroundColor: '#e5293e',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginHorizontal: 16,
-    marginVertical: 16,
-    alignItems: 'center',
-    shadowColor: '#e5293e',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  reviewButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
-    padding: 24,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontWeight: 'bold',
-    fontSize: 18,
-    marginBottom: 8,
-    color: '#e5293e',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    backgroundColor: '#f8f9fa',
-    marginBottom: 12,
-    color: '#333',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inputHalf: {
-    flex: 1,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    gap: 8,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-  },
-  modalButtonPrimary: {
-    backgroundColor: '#e5293e',
-  },
-  modalButtonSecondary: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-  },
-  modalButtonTextPrimary: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  modalButtonTextSecondary: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  cancelButton: {
-    marginTop: 8,
-    alignSelf: 'center',
-  },
-  cancelButtonText: {
-    color: '#e5293e',
-    fontWeight: 'bold',
-  },
-  // Delivery payment modal styles
-  deliveryPaymentOptions: {
-    marginBottom: 20,
-  },
-  deliveryPaymentOption: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  deliveryPaymentOptionSelected: {
-    backgroundColor: '#e5293e',
-    borderColor: '#e5293e',
-  },
-  deliveryPaymentText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  deliveryPaymentTextSelected: {
-    color: '#fff',
-  },
-  trocoSection: {
-    marginBottom: 20,
-  },
-  trocoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#333',
-  },
-  trocoOption: {
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    alignItems: 'center',
-  },
-  trocoOptionSelected: {
-    backgroundColor: '#e5293e',
-    borderColor: '#e5293e',
-  },
-  trocoText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  trocoTextSelected: {
-    color: '#fff',
-  },
-  trocoInputSection: {
-    marginTop: 12,
-  },
-  trocoInputLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  trocoInput: {
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    marginBottom: 8,
-  },
-  trocoTotalText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  // Card selection modal styles
-  cartaoOption: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    marginBottom: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    backgroundColor: '#f8f9fa',
-  },
-  cartaoOptionSelected: {
-    borderColor: '#e5293e',
-    backgroundColor: '#fff5f5',
-  },
-  cartaoOptionInfo: {
-    flex: 1,
-  },
-  cartaoOptionBandeira: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  cartaoOptionNumero: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  cartaoOptionValidade: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 2,
-  },
-  cartaoOptionPadrao: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#e5293e',
-    backgroundColor: '#fff5f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  cvvSection: {
-    marginTop: 16,
-  },
-  cvvTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#333',
-  },
-  cvvInput: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    marginBottom: 8,
-  },
-  cvvDescription: {
-    fontSize: 12,
-    color: '#666',
-  },
-  noCardsContainer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  noCardsText: {
-    color: '#666',
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  noCardsSubtext: {
-    color: '#999',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  errorText: {
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-});
 
 export default FormaPagamentoScreen;

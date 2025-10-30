@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Image, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -117,172 +117,140 @@ const PerfilScreen: React.FC = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Carregando...</Text>
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#ea1d2c" />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header com avatar e nome */}
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
+        <View className="bg-white pt-6 pb-8 px-5 items-center border-b border-gray-100">
+          <View className="relative mb-4">
+            {/* Avatar */}
+            <View className="w-24 h-24 rounded-full bg-red-500 items-center justify-center border-4 border-white shadow-lg">
               {userPhoto ? (
-                <Image source={{ uri: userPhoto }} style={styles.avatarImage} />
+                <Image 
+                  source={{ uri: userPhoto }} 
+                  className="w-full h-full rounded-full"
+                  resizeMode="cover"
+                />
               ) : (
-                <Text style={styles.avatarText}>👤</Text>
+                <Ionicons name="person" size={48} color="#fff" />
               )}
             </View>
-            <TouchableOpacity style={styles.editAvatarButton} onPress={showImagePickerOptions}>
-              <Text style={styles.editAvatarText}>✏️</Text>
+            
+            {/* Botão de editar avatar */}
+            <TouchableOpacity
+              onPress={showImagePickerOptions}
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-red-500 items-center justify-center border-2 border-white shadow-md"
+              activeOpacity={0.8}
+            >
+              <Ionicons name="pencil" size={14} color="#fff" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.userName}>{user?.nome || 'Usuário'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'usuario@email.com'}</Text>
+          
+          {/* Email em destaque */}
+          <Text className="text-lg font-bold text-gray-900 mb-1">
+            {user?.email || 'usuario@email.com'}
+          </Text>
+          
+          {/* Nome do usuário */}
+          <Text className="text-base text-gray-500">
+            {user?.nome || 'Usuário'}
+          </Text>
         </View>
 
         {/* Seção de opções */}
-        <View style={styles.optionsSection}>
-          <Text style={styles.sectionTitle}>Minha Conta</Text>
+        <View className="bg-white mt-3 px-5 py-4">
+          <Text className="text-lg font-bold text-gray-900 mb-4">
+            Minha Conta
+          </Text>
           
+          {/* Meus Endereços */}
           <TouchableOpacity
-            style={styles.optionItem}
+            className="flex-row items-center py-4 border-b border-gray-100"
             onPress={() => navigation.navigate('Enderecos')}
+            activeOpacity={0.7}
           >
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>📍</Text>
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-4">
+                <Ionicons name="location" size={20} color="#ea1d2c" />
               </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Meus Endereços</Text>
-                <Text style={styles.optionSubtitle}>Gerencie seus endereços de entrega</Text>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Meus Endereços
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Gerencie seus endereços de entrega
+                </Text>
               </View>
             </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
+          {/* Meus Cartões */}
           <TouchableOpacity
-            style={styles.optionItem}
+            className="flex-row items-center py-4 border-b border-gray-100"
             onPress={() => (navigation as any).navigate('MeusCartoes')}
+            activeOpacity={0.7}
           >
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>💳</Text>
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-yellow-50 items-center justify-center mr-4">
+                <Ionicons name="card" size={20} color="#eab308" />
               </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Meus Cartões</Text>
-                <Text style={styles.optionSubtitle}>Gerencie seus cartões salvos</Text>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Meus Cartões
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Gerencie seus cartões salvos
+                </Text>
               </View>
             </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
+          {/* Meus Pedidos */}
           <TouchableOpacity 
-            style={styles.optionItem}
+            className="flex-row items-center py-4"
             onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' })}
+            activeOpacity={0.7}
           >
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>📋</Text>
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center mr-4">
+                <Ionicons name="receipt" size={20} color="#f59e0b" />
               </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Meus Pedidos</Text>
-                <Text style={styles.optionSubtitle}>Histórico de pedidos</Text>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Meus Pedidos
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Histórico de pedidos
+                </Text>
               </View>
             </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
-
-          {/* <TouchableOpacity 
-            style={styles.optionItem}
-            onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' })}
-          >
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>⭐</Text>
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Avaliações</Text>
-                <Text style={styles.optionSubtitle}>Avalie seus pedidos entregues</Text>
-              </View>
-            </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity> */}
         </View>
 
-        {/* Seção de configurações */}
-        {/* <View style={styles.optionsSection}>
-          <Text style={styles.sectionTitle}>Configurações</Text>
-          
-          <TouchableOpacity style={styles.optionItem}>
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>🔔</Text>
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Notificações</Text>
-                <Text style={styles.optionSubtitle}>Gerencie suas notificações</Text>
-              </View>
-            </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.optionItem}>
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>🔒</Text>
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Privacidade</Text>
-                <Text style={styles.optionSubtitle}>Configurações de privacidade</Text>
-              </View>
-            </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.optionItem}>
-            <View style={styles.optionLeft}>
-              <View style={styles.optionIcon}>
-                <Text style={styles.iconText}>❓</Text>
-              </View>
-              <View style={styles.optionContent}>
-                <Text style={styles.optionTitle}>Ajuda</Text>
-                <Text style={styles.optionSubtitle}>Central de ajuda</Text>
-              </View>
-            </View>
-            <View style={styles.optionRight}>
-              <Text style={styles.chevron}>›</Text>
-            </View>
-          </TouchableOpacity>
-        </View> */}
-
         {/* Botão de logout */}
-        <View style={styles.logoutSection}>
+        <View className="bg-white mt-3 px-5 py-6">
           <TouchableOpacity
-            style={styles.logoutButton}
+            className="bg-white border-2 border-red-500 py-4 px-6 rounded-xl items-center"
             onPress={async () => {
               await AsyncStorage.removeItem('jwtToken');
               navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
             }}
+            activeOpacity={0.8}
           >
-            <Text style={styles.logoutButtonText}>Sair da Conta</Text>
+            <Text className="text-red-500 text-base font-semibold">
+              Sair da Conta
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -290,166 +258,6 @@ const PerfilScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingTop: 20,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 16,
-  },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#e5293e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  avatarText: {
-    fontSize: 40,
-    color: '#fff',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 45,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#e5293e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  editAvatarText: {
-    fontSize: 14,
-    color: '#fff',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 16,
-    color: '#666',
-  },
-  optionsSection: {
-    backgroundColor: '#fff',
-    marginTop: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f4',
-  },
-  optionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  optionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f8f9fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-  },
-  iconText: {
-    fontSize: 20,
-  },
-  optionContent: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 2,
-  },
-  optionSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  optionRight: {
-    marginLeft: 12,
-  },
-  chevron: {
-    fontSize: 20,
-    color: '#ccc',
-    fontWeight: 'bold',
-  },
-  logoutSection: {
-    backgroundColor: '#fff',
-    marginTop: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-  },
-  logoutButton: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#dc3545',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  logoutButtonText: {
-    color: '#dc3545',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+export default PerfilScreen;
 
 export default PerfilScreen;

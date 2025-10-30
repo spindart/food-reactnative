@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 import React, { useEffect } from 'react';
+import { verifyInstallation } from 'nativewind';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -84,6 +85,7 @@ function MainTabs() {
 export default function App() {
   useEffect(() => {
     registerForPushNotifications();
+    verifyInstallation();
   }, []);
 
   return (

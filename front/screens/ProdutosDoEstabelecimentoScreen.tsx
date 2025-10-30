@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, Image, Modal, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, Modal, Pressable, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { getProdutoByEstabelecimento } from '../services/produtoService';
 import { getCurrentUser } from '../services/currentUserService';
-import FloatingCartButton from '../components/FloatingCartButton';
 import { useCart } from '../context/CartContext';
 import { Alert } from 'react-native';
 
@@ -127,65 +127,202 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
     closeModal();
   };
 
+  const totalCart = cartState.items.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
+  const qtdCart = cartState.items.reduce((sum, item) => sum + item.quantidade, 0);
+
   return (
-    <View style={styles.container}>
-      {/* Banner do estabelecimento */}
-      {estabelecimento.imagem ? (
-        <Image source={{ uri: estabelecimento.imagem }} style={styles.banner} />
-      ) : (
-        <Image source={require('../assets/icon.png')} style={styles.banner} />
-      )}
-      {/* Botão de voltar fixo */}
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backButtonText}>{'<'} Voltar</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>{estabelecimento.nome}</Text>
-      {/* Categorias internas */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriaBar}>
+    <View className="flex-1 bg-gray-50">
+      {/* Header com Banner e Botão Voltar */}
+      <View className="relative">
+        <Image
+          source={estabelecimento.imagem ? { uri: estabelecimento.imagem } : require('../assets/icon.png')}
+          className="w-full h-48 object-cover rounded-b-3xl"
+          resizeMode="cover"
+        />
+        {/* Overlay escuro para melhorar legibilidade */}
+        <View className="absolute inset-0 bg-black/20 rounded-b-3xl" />
+        
+        {/* Botão voltar sobreposto */}
         <TouchableOpacity
-          key="all"
-          style={[styles.categoriaChip, selectedCategoria === null && styles.selectedCategoriaChip]}
-          onPress={() => setSelectedCategoria(null)}
+          onPress={() => navigation.goBack()}
+          className="absolute top-12 left-4 bg-white rounded-full p-2 shadow-lg"
           activeOpacity={0.8}
         >
-          <Text style={[styles.categoriaChipLabel, selectedCategoria === null && styles.selectedCategoriaChipLabel]}>Todos</Text>
+          <Ionicons name="arrow-back" size={20} color="#ea1d2c" />
         </TouchableOpacity>
-        {estabelecimento.categorias && estabelecimento.categorias.map((cat: any) => (
+        
+        {/* Informações do estabelecimento sobre o banner */}
+        <View className="absolute bottom-4 left-4 right-4">
+          <Text className="text-white text-2xl font-bold mb-2 shadow-lg">
+            {estabelecimento.nome}
+          </Text>
+          
+          {/* Informações adicionais */}
+          <View className="flex-row items-center flex-wrap">
+            {/* Tempo de entrega */}
+            {(estabelecimento.tempoEntregaMin || estabelecimento.tempoEntregaMax) && (
+              <View className="flex-row items-center mr-4">
+                <Ionicons name="time-outline" size={16} color="#fff" />
+                <Text className="text-white text-sm font-medium ml-1 shadow-lg">
+                  {estabelecimento.tempoEntregaMin || '-'} - {estabelecimento.tempoEntregaMax || '-'} min
+                </Text>
+              </View>
+            )}
+            
+            {/* Taxa de entrega */}
+            {typeof estabelecimento.taxaEntrega === 'number' && estabelecimento.taxaEntrega > 0 && (
+              <View className="flex-row items-center mr-4">
+                <Ionicons name="bicycle-outline" size={16} color="#fff" />
+                <Text className="text-white text-sm font-medium ml-1 shadow-lg">
+                  Taxa: R$ {estabelecimento.taxaEntrega.toFixed(2).replace('.', ',')}
+                </Text>
+              </View>
+            )}
+            
+            {/* Grátis se taxa for 0 */}
+            {typeof estabelecimento.taxaEntrega === 'number' && estabelecimento.taxaEntrega === 0 && (
+              <View className="flex-row items-center">
+                <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                <Text className="text-white text-sm font-medium ml-1 shadow-lg">
+                  Entrega grátis
+                </Text>
+              </View>
+            )}
+          </View>
+          
+          {/* Descrição do estabelecimento */}
+          {estabelecimento.descricao && (
+            <Text className="text-white text-xs mt-2 opacity-90 shadow-lg" numberOfLines={2}>
+              {estabelecimento.descricao}
+            </Text>
+          )}
+        </View>
+      </View>
+
+      {/* Categorias */}
+      <View className="bg-white py-3 shadow-sm mb-1">
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className="flex-row"
+          contentContainerStyle={{ paddingHorizontal: 16 }}
+        >
           <TouchableOpacity
-            key={cat.id}
-            style={[styles.categoriaChip, selectedCategoria === cat.id && styles.selectedCategoriaChip]}
-            onPress={() => setSelectedCategoria(cat.id)}
-            activeOpacity={0.8}
+            onPress={() => setSelectedCategoria(null)}
+            activeOpacity={0.7}
+            className={`mr-3 px-4 py-2 rounded-full items-center justify-center ${
+              selectedCategoria === null
+                ? 'bg-red-500'
+                : 'bg-gray-100'
+            }`}
           >
-            <Text style={[styles.categoriaChipLabel, selectedCategoria === cat.id && styles.selectedCategoriaChipLabel]}>{cat.nome}</Text>
+            <Text
+              className={`text-sm ${
+                selectedCategoria === null
+                  ? 'text-white font-semibold'
+                  : 'text-gray-700'
+              }`}
+            >
+              Todos
+            </Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+          {estabelecimento.categorias &&
+            estabelecimento.categorias.map((cat: any) => (
+              <TouchableOpacity
+                key={cat.id}
+                onPress={() => setSelectedCategoria(cat.id)}
+                activeOpacity={0.7}
+                className={`mr-3 px-4 py-2 rounded-full items-center justify-center ${
+                  selectedCategoria === cat.id
+                    ? 'bg-red-500'
+                    : 'bg-gray-100'
+                }`}
+              >
+                <Text
+                  className={`text-sm ${
+                    selectedCategoria === cat.id
+                      ? 'text-white font-semibold'
+                      : 'text-gray-700'
+                  }`}
+                >
+                  {cat.nome}
+                </Text>
+              </TouchableOpacity>
+            ))}
+        </ScrollView>
+      </View>
+
       {/* Lista de produtos */}
       {loading ? (
-        <Text>Carregando...</Text>
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#ea1d2c" />
+        </View>
       ) : error ? (
-        <Text style={styles.errorText}>{error}</Text>
+        <View className="flex-1 justify-center items-center px-4">
+          <Text className="text-red-500 text-base text-center">{error}</Text>
+        </View>
       ) : filtered.length === 0 ? (
-        <Text style={{ color: '#888', textAlign: 'center', marginTop: 32, fontSize: 16 }}>Nenhum produto nesta categoria.</Text>
+        <View className="flex-1 justify-center items-center px-4">
+          <Text className="text-gray-500 text-base text-center mt-8">
+            Nenhum produto nesta categoria.
+          </Text>
+        </View>
       ) : (
         <FlatList
           data={filtered}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}
           renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Image source={{ uri: item.imagem }} style={styles.prodImage} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.nome}</Text>
-                <Text style={styles.desc}>{item.descricao}</Text>
-                <Text style={styles.price}>R$ {item.preco.toFixed(2)}</Text>
+            <View className="bg-white rounded-xl mb-3 p-4 flex-row shadow-sm border border-gray-100">
+              {/* Imagem do produto */}
+              {item.imagem ? (
+                <Image
+                  source={{ uri: item.imagem }}
+                  className="w-16 h-16 rounded-xl bg-gray-200"
+                  resizeMode="cover"
+                />
+              ) : (
+                <View className="w-16 h-16 rounded-xl bg-gray-200 items-center justify-center">
+                  <Ionicons name="image-outline" size={24} color="#9ca3af" />
+                </View>
+              )}
+              
+              {/* Informações do produto */}
+              <View className="flex-1 ml-3 justify-between">
+                <View>
+                  <Text className="text-base font-bold text-gray-900 mb-1">
+                    {item.nome}
+                  </Text>
+                  {item.descricao && (
+                    <Text className="text-sm text-gray-500 mb-2" numberOfLines={1}>
+                      {item.descricao}
+                    </Text>
+                  )}
+                  <Text className="text-lg font-semibold text-red-500">
+                    R$ {item.preco.toFixed(2).replace('.', ',')}
+                  </Text>
+                </View>
+                
+                {/* Botão Adicionar/Editar */}
                 {isDono ? (
-                  <TouchableOpacity style={[styles.addButton, { backgroundColor: '#007BFF' }]} onPress={() => navigation.navigate('EditarProduto', { produto: item })}>
-                    <Text style={styles.addButtonText}>Editar</Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('EditarProduto', { produto: item })}
+                    className="bg-blue-500 px-3 py-1.5 rounded-full self-start mt-2"
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-white text-sm font-semibold">
+                      Editar
+                    </Text>
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={styles.addButton} onPress={() => openModal(item)}>
-                    <Text style={styles.addButtonText}>Adicionar</Text>
+                  <TouchableOpacity
+                    onPress={() => openModal(item)}
+                    className="bg-red-500 px-3 py-1.5 rounded-full self-start mt-2"
+                    activeOpacity={0.8}
+                  >
+                    <Text className="text-white text-sm font-semibold">
+                      Adicionar
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -193,33 +330,103 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
           )}
         />
       )}
-      <FloatingCartButton />
+
+      {/* Bottom Bar - Carrinho Fixo */}
+      {qtdCart > 0 && (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('HomeTabs', { screen: 'Carrinho' })}
+          className="absolute bottom-0 left-0 right-0 bg-red-500 rounded-t-3xl px-6 py-4 shadow-2xl"
+          activeOpacity={0.9}
+        >
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text className="text-white text-base font-bold">
+                {qtdCart} {qtdCart === 1 ? 'item' : 'itens'} | R$ {totalCart.toFixed(2).replace('.', ',')}
+              </Text>
+              <Text className="text-white text-xs mt-0.5 opacity-90">
+                Ver carrinho →
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Modal de detalhes do produto */}
       <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <View className="flex-1 bg-black/50 justify-center items-center px-4">
+          <View className="bg-white rounded-3xl p-6 w-full max-w-sm">
             {modalProduto && (
               <>
-                <Image source={{ uri: modalProduto.imagem }} style={styles.modalImage} />
-                <Text style={styles.modalName}>{modalProduto.nome}</Text>
-                <Text style={styles.modalDesc}>{modalProduto.descricao}</Text>
-                <Text style={styles.modalPrice}>R$ {modalProduto.preco.toFixed(2)}</Text>
-                <View style={styles.qtdRow}>
-                  <TouchableOpacity style={styles.qtdButton} onPress={() => setQuantidade(q => Math.max(1, q - 1))}><Text style={styles.qtdButtonText}>-</Text></TouchableOpacity>
-                  <Text style={styles.qtdText}>{quantidade}</Text>
-                  <TouchableOpacity style={styles.qtdButton} onPress={() => setQuantidade(q => q + 1)}><Text style={styles.qtdButtonText}>+</Text></TouchableOpacity>
+                {modalProduto.imagem ? (
+                  <Image
+                    source={{ uri: modalProduto.imagem }}
+                    className="w-32 h-32 rounded-2xl mx-auto mb-4 bg-gray-200"
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View className="w-32 h-32 rounded-2xl mx-auto mb-4 bg-gray-200 items-center justify-center">
+                    <Ionicons name="image-outline" size={48} color="#9ca3af" />
+                  </View>
+                )}
+                <Text className="text-xl font-bold text-gray-900 text-center mb-2">
+                  {modalProduto.nome}
+                </Text>
+                {modalProduto.descricao && (
+                  <Text className="text-sm text-gray-600 text-center mb-3">
+                    {modalProduto.descricao}
+                  </Text>
+                )}
+                <Text className="text-2xl font-bold text-red-500 text-center mb-4">
+                  R$ {modalProduto.preco.toFixed(2).replace('.', ',')}
+                </Text>
+                
+                {/* Controle de quantidade */}
+                <View className="flex-row items-center justify-center mb-4">
+                  <TouchableOpacity
+                    onPress={() => setQuantidade((q) => Math.max(1, q - 1))}
+                    className="bg-gray-100 rounded-full w-10 h-10 items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="remove" size={20} color="#ea1d2c" />
+                  </TouchableOpacity>
+                  <Text className="text-xl font-bold text-gray-900 mx-6 min-w-[40px] text-center">
+                    {quantidade}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setQuantidade((q) => q + 1)}
+                    className="bg-gray-100 rounded-full w-10 h-10 items-center justify-center"
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add" size={20} color="#ea1d2c" />
+                  </TouchableOpacity>
                 </View>
+                
+                {/* Campo de observação */}
                 <TextInput
-                  style={styles.obsInput}
+                  className="border border-gray-200 rounded-xl px-4 py-3 mb-4 text-gray-900"
                   placeholder="Observação (ex: sem cebola)"
+                  placeholderTextColor="#9ca3af"
                   value={observacao}
                   onChangeText={setObservacao}
                 />
-                <TouchableOpacity style={styles.modalAddButton} onPress={handleAddToCart}>
-                  <Text style={styles.modalAddButtonText}>Adicionar ao carrinho</Text>
+                
+                {/* Botão adicionar ao carrinho */}
+                <TouchableOpacity
+                  onPress={handleAddToCart}
+                  className="bg-red-500 rounded-xl py-4 mb-3"
+                  activeOpacity={0.8}
+                >
+                  <Text className="text-white font-bold text-center text-base">
+                    Adicionar ao carrinho
+                  </Text>
                 </TouchableOpacity>
-                <Pressable style={styles.modalClose} onPress={closeModal}>
-                  <Text style={styles.modalCloseText}>Fechar</Text>
+                
+                {/* Botão fechar */}
+                <Pressable onPress={closeModal}>
+                  <Text className="text-red-500 font-semibold text-center text-base">
+                    Fechar
+                  </Text>
                 </Pressable>
               </>
             )}
@@ -229,69 +436,5 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 0, backgroundColor: '#fff' },
-  banner: { width: '100%', height: 120, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, marginBottom: 8 },
-  backButton: { position: 'absolute', top: 24, left: 16, backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6, elevation: 2, zIndex: 10 },
-  backButtonText: { color: '#e5293e', fontWeight: 'bold', fontSize: 15 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, marginLeft: 16, marginTop: 8 },
-  categoriaBar: { marginBottom: 8, paddingLeft: 8 },
-  categoriaChip: {
-    backgroundColor: '#f6f6f6',
-    borderRadius: 18,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    marginRight: 10,
-    borderWidth: 0,
-    minHeight: 32,
-    minWidth: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  selectedCategoriaChip: {
-    backgroundColor: '#e5293e',
-    borderColor: '#e5293e',
-    shadowColor: '#e5293e',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  categoriaChipLabel: {
-    color: '#e5293e',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  selectedCategoriaChipLabel: {
-    color: '#fff',
-  },
-  card: { backgroundColor: '#fff', borderRadius: 18, flexDirection: 'row', alignItems: 'center', padding: 0, marginBottom: 18, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, overflow: 'hidden', borderWidth: 1, borderColor: '#f1f1f1' },
-  prodImage: { width: 90, height: 90, borderRadius: 18, margin: 12, backgroundColor: '#f6f6f6' },
-  name: { fontSize: 19, fontWeight: 'bold', marginTop: 8, marginLeft: 0, marginBottom: 2, color: '#222' },
-  desc: { fontSize: 15, color: '#666', marginLeft: 0, marginBottom: 2 },
-  price: { fontSize: 16, color: '#e5293e', marginLeft: 0, marginBottom: 8, fontWeight: 'bold' },
-  addButton: { backgroundColor: '#e5293e', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 18, alignSelf: 'flex-start' },
-  addButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  errorText: { color: 'red', fontSize: 14 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', borderRadius: 18, padding: 24, width: 320, alignItems: 'center' },
-  modalImage: { width: 120, height: 120, borderRadius: 18, marginBottom: 8, backgroundColor: '#f6f6f6' },
-  modalName: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  modalDesc: { fontSize: 15, color: '#666', marginBottom: 8, textAlign: 'center' },
-  modalPrice: { fontSize: 18, color: '#e5293e', fontWeight: 'bold', marginBottom: 12 },
-  qtdRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  qtdButton: { backgroundColor: '#eee', borderRadius: 8, padding: 8, marginHorizontal: 12 },
-  qtdButtonText: { fontSize: 18, color: '#e5293e', fontWeight: 'bold' },
-  qtdText: { fontSize: 16, fontWeight: 'bold', color: '#222' },
-  obsInput: { borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8, width: '100%', marginBottom: 12, color: '#222' },
-  modalAddButton: { backgroundColor: '#e5293e', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginBottom: 8 },
-  modalAddButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  modalClose: { marginTop: 4 },
-  modalCloseText: { color: '#e5293e', fontWeight: 'bold', fontSize: 15 },
-});
 
 export default ProdutosDoEstabelecimentoScreen;
