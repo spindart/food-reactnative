@@ -86,20 +86,25 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         tempoEntregaMin: Number(tempoEntregaMin),
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
-        categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)),
+        // Backend espera array de nomes de categorias
+        // (categoria de estabelecimento, não as de produto)
+        categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)).map((c) => ({ id: c.id, nome: c.nome })),
         imagem,
         diasAbertos,
         horaAbertura,
         horaFechamento,
       };
-      await createEstabelecimento(payload);
+      // Enviar só nomes no campo categorias conforme controller
+      const backendPayload: any = { ...payload, categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)).map((c) => c.nome) };
+      await createEstabelecimento(backendPayload);
       setSnackbar({ visible: true, message: 'Estabelecimento cadastrado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
         navigation.goBack();
       }, 1500);
-    } catch (error) {
-      setSnackbar({ visible: true, message: 'Erro ao cadastrar estabelecimento.', type: 'error' });
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || 'Erro ao cadastrar estabelecimento.';
+      setSnackbar({ visible: true, message: msg, type: 'error' });
       setTimeout(() => setSnackbar((prev) => ({ ...prev, visible: false })), 2000);
     } finally {
       setLoading(false);

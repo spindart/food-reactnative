@@ -6,9 +6,10 @@ const prisma = new PrismaClient();
 
 const produtoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
-  descricao: z.string().min(1, 'Descrição é obrigatória'),
+  descricao: z.string().optional().nullable(),
   preco: z.number().positive('Preço deve ser positivo'),
   estabelecimentoId: z.number().int().positive('EstabelecimentoId deve ser um inteiro positivo'),
+  produtoCategoriaId: z.number().int().positive().optional().nullable(),
   imagem: z.string().optional().nullable(), // imagem opcional
 });
 
@@ -20,7 +21,7 @@ export class ProdutoController {
       return;
     }
     try {
-      const { nome, descricao, preco, estabelecimentoId, imagem } = parse.data;
+      const { nome, descricao, preco, estabelecimentoId, imagem, produtoCategoriaId } = parse.data;
       // Validação: só o dono do estabelecimento pode cadastrar produtos
       const user = (req as any).user;
       const estabelecimento = await prisma.estabelecimento.findUnique({ where: { id: estabelecimentoId } });
@@ -33,8 +34,18 @@ export class ProdutoController {
         res.status(403).json({ error: 'Apenas o dono do estabelecimento pode cadastrar produtos para ele.' });
         return;
       }
+      // Valida categoria do produto (se fornecida) pertencer ao mesmo estabelecimento
+      if (produtoCategoriaId) {
+        const categoria = await prisma.produtoCategoria.findFirst({
+          where: { id: produtoCategoriaId, estabelecimentoId },
+        });
+        if (!categoria) {
+          res.status(400).json({ error: 'Categoria do produto inválida para este estabelecimento.' });
+          return;
+        }
+      }
       const produto = await prisma.produto.create({
-        data: { nome, descricao, preco, estabelecimentoId, imagem },
+        data: { nome, descricao: descricao ?? '', preco, estabelecimentoId, imagem, produtoCategoriaId: produtoCategoriaId ?? null },
       });
       res.status(201).json(produto);
       return;
@@ -46,9 +57,11 @@ export class ProdutoController {
 
   static async getAll(req: Request, res: Response): Promise<void> {
     try {
-      const { estabelecimentoId } = req.query;
+      const { estabelecimentoId, produtoCategoriaId } = req.query as any;
       let produtos;
-      if (estabelecimentoId) {
+      if (estabelecimentoId && produtoCategoriaId) {
+        produtos = await prisma.produto.findMany({ where: { estabelecimentoId: Number(estabelecimentoId), produtoCategoriaId: Number(produtoCategoriaId) } });
+      } else if (estabelecimentoId) {
         produtos = await prisma.produto.findMany({ where: { estabelecimentoId: Number(estabelecimentoId) } });
       } else {
         produtos = await prisma.produto.findMany();
@@ -87,10 +100,19 @@ export class ProdutoController {
     }
     try {
       const { id } = req.params;
-      const { nome, descricao, preco, estabelecimentoId, imagem } = parse.data;
+      const { nome, descricao, preco, estabelecimentoId, imagem, produtoCategoriaId } = parse.data;
+      if (produtoCategoriaId) {
+        const categoria = await prisma.produtoCategoria.findFirst({
+          where: { id: produtoCategoriaId, estabelecimentoId },
+        });
+        if (!categoria) {
+          res.status(400).json({ error: 'Categoria do produto inválida para este estabelecimento.' });
+          return;
+        }
+      }
       const produto = await prisma.produto.update({
         where: { id: Number(id) },
-        data: { nome, descricao, preco, estabelecimentoId, imagem },
+        data: { nome, descricao: descricao ?? '', preco, estabelecimentoId, imagem, produtoCategoriaId: produtoCategoriaId ?? null },
       });
       res.json(produto);
       return;

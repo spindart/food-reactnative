@@ -7,6 +7,7 @@ import pedidoRoutes from './routes/pedido.routes';
 import usuarioRoutes from './routes/usuario.routes';
 import pagamentoRoutes from './routes/pagamento.routes';
 import categoriaRoutes from './routes/categoria.routes';
+import produtoCategoriaRoutes from './routes/produto-categoria.routes';
 import { initNotificationWebSocket } from './services/notification.service';
 import addressRoutes from './routes/address.routes';
 import { errorHandler } from './services/error.middleware';
@@ -29,6 +30,7 @@ app.use('/api/usuarios', usuarioRoutes);
 app.use('/api/pagamento', pagamentoRoutes);
 app.use('/api/enderecos', addressRoutes);
 app.use('/api/categorias', categoriaRoutes);
+app.use('/api/produto-categorias', produtoCategoriaRoutes);
 app.use('/api/cartoes', cartaoRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 

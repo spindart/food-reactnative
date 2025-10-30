@@ -57,6 +57,7 @@ model Estabelecimento {
   dono            Usuario     @relation("UsuarioEstabelecimentos", fields: [donoId], references: [id])
   pedidos         Pedido[]
   produtos        Produto[]
+  produtoCategorias ProdutoCategoria[]
   tempoEntregaMin   Int      @default(30)
   tempoEntregaMax   Int      @default(50)
   taxaEntrega       Float    @default(5.0)
@@ -76,9 +77,11 @@ model Produto {
   descricao         String
   preco             Float
   estabelecimentoId Int
+  produtoCategoriaId Int?
   itensPedido       ItemPedido[]
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
   categorias        Categoria[]     @relation("ProdutoCategorias")
+  produtoCategoria  ProdutoCategoria? @relation(fields: [produtoCategoriaId], references: [id])
   imagem            String?         // URL ou base64 da imagem do produto (opcional)
 }
 
@@ -142,6 +145,21 @@ model Categoria {
   nome              String          @unique
   estabelecimentos   Estabelecimento[] @relation("EstabelecimentoCategorias")
   produtos          Produto[]       @relation("ProdutoCategorias")
+}
+
+model ProdutoCategoria {
+  id                Int             @id @default(autoincrement())
+  estabelecimentoId Int
+  nome              String
+  slug              String?
+  ordem             Int?            @default(0)
+  ativa             Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  produtos          Produto[]
+
+  @@unique([estabelecimentoId, nome])
 }
 
 model Cartao {

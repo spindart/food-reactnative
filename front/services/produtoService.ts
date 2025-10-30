@@ -8,7 +8,7 @@ export type Produto = {
   descricao: string;
   imagem: string;
   estabelecimentoId?: string | number;
-  categoriaId?: string;
+  produtoCategoriaId?: number | null;
 };
 
 export const getAllProdutos = async () => {
@@ -61,9 +61,10 @@ export const deleteProduto = async (id: string) => {
   }
 };
 
-export const getProdutoByEstabelecimento = async (estabelecimentoId: string) => {
+export const getProdutoByEstabelecimento = async (estabelecimentoId: string, produtoCategoriaId?: number) => {
   try {
-    const response = await api.get(`/produtos?estabelecimentoId=${estabelecimentoId}`);
+    const qs = produtoCategoriaId ? `&produtoCategoriaId=${produtoCategoriaId}` : '';
+    const response = await api.get(`/produtos?estabelecimentoId=${estabelecimentoId}${qs}`);
     return response.data;
   } catch (error) {
     console.error('Erro ao buscar produtos do estabelecimento:', error);

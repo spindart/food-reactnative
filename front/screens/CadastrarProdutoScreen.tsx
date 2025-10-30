@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, Platform, Modal, Pressable } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { createProduto } from '../services/produtoService';
+import { listProdutoCategorias, createProdutoCategoria, ProdutoCategoria } from '../services/produtoCategoriaService';
 import { Snackbar } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -15,9 +16,56 @@ const CadastrarProdutoScreen: React.FC = () => {
   const [descricao, setDescricao] = useState('');
   const [preco, setPreco] = useState('');
   const [imagem, setImagem] = useState<string>('');
-  const [categoriaId, setCategoriaId] = useState(
-    estabelecimento.categorias && estabelecimento.categorias.length > 0 ? estabelecimento.categorias[0].id : ''
-  );
+  const [categoriaId, setCategoriaId] = useState<number | null>(null);
+  const [categorias, setCategorias] = useState<ProdutoCategoria[]>([]);
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState('');
+  const [novaCategoriaOrdem, setNovaCategoriaOrdem] = useState('0');
+  const [criandoCategoria, setCriandoCategoria] = useState(false);
+  const [modalCategoriaVisivel, setModalCategoriaVisivel] = useState(false);
+  React.useEffect(() => {
+    const fetchCats = () => {
+      listProdutoCategorias(estabelecimento.id).then((cats) => {
+        setCategorias(cats);
+        if (cats.length > 0) {
+          // mantém seleção se ainda existir; senão, seleciona a primeira
+          if (!categoriaId || !cats.some((c) => c.id === categoriaId)) {
+            setCategoriaId(cats[0].id);
+          }
+        } else {
+          setCategoriaId(null);
+        }
+      }).catch(() => {});
+    };
+    fetchCats();
+    const unsubscribe = (navigation as any).addListener('focus', fetchCats);
+    return unsubscribe;
+  }, [estabelecimento.id, navigation]);
+
+  const handleCriarCategoria = async () => {
+    const nome = (novaCategoriaNome || '').trim();
+    if (!nome) {
+      setSnackbar({ visible: true, message: 'Informe o nome da categoria.', type: 'error' });
+      return;
+    }
+    try {
+      setCriandoCategoria(true);
+      const ordemNum = Number(novaCategoriaOrdem);
+      const criada = await createProdutoCategoria(estabelecimento.id, { nome, ordem: Number.isFinite(ordemNum) ? ordemNum : 0 });
+      // Atualiza lista e seleciona nova
+      const atualizadas = await listProdutoCategorias(estabelecimento.id);
+      setCategorias(atualizadas);
+      setCategoriaId(criada.id);
+      setNovaCategoriaNome('');
+      setNovaCategoriaOrdem('0');
+      setModalCategoriaVisivel(false);
+      setSnackbar({ visible: true, message: 'Categoria criada!', type: 'success' });
+    } catch (e) {
+      setSnackbar({ visible: true, message: 'Erro ao criar categoria.', type: 'error' });
+    } finally {
+      setCriandoCategoria(false);
+    }
+  };
+
   const [snackbar, setSnackbar] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
   const [loading, setLoading] = useState(false);
 
@@ -71,13 +119,17 @@ const CadastrarProdutoScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!nome || !descricao || !preco || !categoriaId) {
-      setSnackbar({ visible: true, message: 'Preencha todos os campos.', type: 'error' });
+    if (!nome || !preco) {
+      setSnackbar({ visible: true, message: 'Preencha todos os campos obrigatórios.', type: 'error' });
+      return;
+    }
+    if (!categoriaId) {
+      setSnackbar({ visible: true, message: 'Selecione uma categoria do produto.', type: 'error' });
       return;
     }
     setLoading(true);
     try {
-      await createProduto({ nome, descricao, preco: parseFloat(preco), estabelecimentoId: estabelecimento.id, imagem, categoriaId });
+      await createProduto({ nome, descricao, preco: parseFloat(preco), estabelecimentoId: estabelecimento.id, imagem, produtoCategoriaId: categoriaId });
       setSnackbar({ visible: true, message: 'Produto cadastrado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -103,7 +155,7 @@ const CadastrarProdutoScreen: React.FC = () => {
       />
       <TextInput
         style={styles.input}
-        placeholder="Descrição"
+        placeholder="Descrição (opcional)"
         value={descricao}
         onChangeText={setDescricao}
       />
@@ -114,23 +166,65 @@ const CadastrarProdutoScreen: React.FC = () => {
         onChangeText={setPreco}
         keyboardType="decimal-pad"
       />
-      <Text style={styles.label}>Categoria</Text>
+      <Text style={styles.label}>Categoria *</Text>
       <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 4, marginBottom: 8, overflow: 'hidden' }}>
-        {estabelecimento.categorias && estabelecimento.categorias.length > 0 ? (
+        {categorias && categorias.length > 0 ? (
           <Picker
-            selectedValue={categoriaId}
+            selectedValue={categoriaId ?? undefined}
             onValueChange={(itemValue) => setCategoriaId(itemValue)}
             style={{ backgroundColor: '#fff' }}
             itemStyle={{ fontWeight: 'bold' }}
           >
-            {estabelecimento.categorias.map((cat: any) => (
+            {categorias.map((cat) => (
               <Picker.Item key={cat.id} label={cat.nome} value={cat.id} />
             ))}
           </Picker>
         ) : (
-          <Text style={{ color: '#888', padding: 10 }}>Nenhuma categoria disponível</Text>
+          <Text style={{ color: '#e11d48', padding: 10 }}>Nenhuma categoria disponível. Toque em "Gerenciar categorias" para criar.</Text>
         )}
       </View>
+      {(!categoriaId) && (
+        <Text style={{ color: '#e11d48', fontSize: 12, marginTop: -4, marginBottom: 8 }}>Campo obrigatório</Text>
+      )}
+
+
+      {/* Botão para gerenciar categorias (nome/ordem) */}
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#0ea5e9' }]}
+        onPress={() => (navigation as any).navigate('GerenciarCategoriasProduto', { estabelecimento: { id: estabelecimento.id, nome: estabelecimento.nome } })}
+      >
+        <Text style={styles.buttonText}>Gerenciar categorias</Text>
+      </TouchableOpacity>
+
+      {/* Modal de Nova Categoria */}
+      <Modal transparent visible={modalCategoriaVisivel} animationType="fade" onRequestClose={() => setModalCategoriaVisivel(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', padding: 16 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 420, borderRadius: 12, padding: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>Nova categoria de produto</Text>
+            <TextInput
+              style={[styles.input, { marginBottom: 8 }]}
+              placeholder="Nome (ex: Bebidas)"
+              value={novaCategoriaNome}
+              onChangeText={setNovaCategoriaNome}
+            />
+            <TextInput
+              style={[styles.input, { marginBottom: 12 }]}
+              placeholder="Ordem (0 = primeiro)"
+              keyboardType="number-pad"
+              value={novaCategoriaOrdem}
+              onChangeText={setNovaCategoriaOrdem}
+            />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+              <Pressable onPress={() => setModalCategoriaVisivel(false)} style={[styles.button, { backgroundColor: '#9ca3af', marginRight: 8 }]}>
+                <Text style={styles.buttonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable onPress={handleCriarCategoria} disabled={criandoCategoria} style={[styles.button]}>
+                <Text style={styles.buttonText}>{criandoCategoria ? 'Salvando...' : 'Salvar'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={{ alignItems: 'center', marginBottom: 12 }}>
         {imagem ? (
           <Image source={{ uri: imagem }} style={{ width: 120, height: 120, borderRadius: 12, marginBottom: 8 }} />
@@ -143,7 +237,7 @@ const CadastrarProdutoScreen: React.FC = () => {
           <Text style={styles.buttonText}>Selecionar Imagem</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
+      <TouchableOpacity style={[styles.button, (!categoriaId || categorias.length === 0) ? { opacity: 0.6 } : null]} onPress={handleSubmit} disabled={loading || !categoriaId || categorias.length === 0}>
         <Text style={styles.buttonText}>{loading ? 'Cadastrando...' : 'Cadastrar'}</Text>
       </TouchableOpacity>
       <Snackbar

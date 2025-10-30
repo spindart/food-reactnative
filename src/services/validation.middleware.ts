@@ -20,9 +20,10 @@ export const estabelecimentoSchema = z.object({
 // Esquema para Produto
 export const produtoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
-  descricao: z.string().min(1, 'Descrição é obrigatória'),
+  descricao: z.string().optional().nullable(),
   preco: z.number().positive('Preço deve ser positivo'),
   estabelecimentoId: z.number().int().positive('EstabelecimentoId deve ser um inteiro positivo'),
+  produtoCategoriaId: z.number().int().positive().optional().nullable(),
   imagem: z.string().optional().nullable(),
 });
 

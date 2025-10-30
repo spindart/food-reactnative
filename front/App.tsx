@@ -16,6 +16,7 @@ import CadastrarProdutoScreen from './screens/CadastrarProdutoScreen';
 import ProdutosDoEstabelecimentoScreen from './screens/ProdutosDoEstabelecimentoScreen';
 import EditarProdutoScreen from './screens/EditarProdutoScreen';
 import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoScreen';
+import GerenciarCategoriasProdutoScreen from './screens/GerenciarCategoriasProdutoScreen';
 import MeusCartoesScreen from './screens/MeusCartoesScreen';
 import PixPaymentConfirmationScreen from './screens/PixPaymentConfirmationScreen';
 import * as Notifications from 'expo-notifications';
@@ -103,6 +104,7 @@ export default function App() {
           <Stack.Screen name="CadastrarProduto" component={CadastrarProdutoScreen} options={{ title: 'Cadastrar Produto' }} />
           <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ headerShown: false }} />
           <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
+          <Stack.Screen name="GerenciarCategoriasProduto" component={GerenciarCategoriasProdutoScreen} options={{ title: 'Categorias de Produto' }} />
           <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
           <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ title: 'Meus Cartões' }} />
           {/* Fluxo de Checkout */}
