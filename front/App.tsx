@@ -101,7 +101,7 @@ export default function App() {
           <Stack.Screen name="CadastrarEstabelecimento" component={CadastrarEstabelecimentoScreen} options={{ title: 'Cadastrar Estabelecimento' }} />
           <Stack.Screen name="EditarEstabelecimento" component={EditarEstabelecimentoScreen} options={{ title: 'Editar Estabelecimento' }} />
           <Stack.Screen name="CadastrarProduto" component={CadastrarProdutoScreen} options={{ title: 'Cadastrar Produto' }} />
-          <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ title: 'Produtos do Estabelecimento' }} />
+          <Stack.Screen name="ProdutosDoEstabelecimento" component={ProdutosDoEstabelecimentoScreen} options={{ headerShown: false }} />
           <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
           <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
           <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ title: 'Meus Cartões' }} />

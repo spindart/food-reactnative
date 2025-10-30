@@ -573,15 +573,22 @@ export class MercadoPagoService {
       console.log('✅ Customer criado no MercadoPago:', response.data.id);
       return response.data;
     } catch (error: any) {
-      console.error('❌ Erro ao criar customer no MercadoPago:', error.response?.data || error.message);
+      const data = error.response?.data;
+      console.error('❌ Erro ao criar customer no MercadoPago:', data || error.message);
       
-      // Se o customer já existe, buscar e retornar
-      if (error.response?.status === 400 && error.response?.data?.message?.includes('already exists')) {
+      // Se o customer já existe, buscar e retornar (variações de mensagem do MP)
+      const alreadyExists = (
+        error.response?.status === 400 && (
+          data?.message?.toLowerCase?.().includes('already exist') ||
+          (Array.isArray(data?.cause) && data.cause.some((c: any) => String(c?.code) === '101' || String(c?.description || '').toLowerCase().includes('already exist')))
+        )
+      );
+      if (alreadyExists) {
         console.log('🔄 Customer já existe, buscando...');
         return await this.searchCustomerByEmail(email);
       }
       
-      throw new Error(`Erro ao criar customer: ${error.response?.data?.message || error.message}`);
+      throw new Error(`Erro ao criar customer: ${data?.message || error.message}`);
     }
   }
 

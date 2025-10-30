@@ -10,6 +10,11 @@ export const estabelecimentoSchema = z.object({
   tempoEntregaMax: z.number().int().positive('Tempo máximo deve ser positivo'),
   categorias: z.array(z.any()).optional(),
   imagem: z.string().optional(),
+  // Funcionamento
+  diasAbertos: z.array(z.number().int().min(0).max(6)).optional(),
+  horaAbertura: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  horaFechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  aberto: z.boolean().optional(),
 });
 
 // Esquema para Produto
@@ -58,3 +63,8 @@ export function validateBody(schema: z.ZodSchema<any>) {
     next();
   };
 }
+
+// Schema simples para alternar flag "aberto"
+export const abertoSchema = z.object({
+  aberto: z.boolean(),
+});

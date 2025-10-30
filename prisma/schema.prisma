@@ -62,6 +62,12 @@ model Estabelecimento {
   taxaEntrega       Float    @default(5.0)
   categorias      Categoria[] @relation("EstabelecimentoCategorias")
   imagem          String?    // URL ou base64 da imagem do estabelecimento
+  // Funcionamento
+  diasAbertos     Int[]
+  horaAbertura    String?
+  horaFechamento  String?
+  // Flag manual de aberto/fechado controlada pelo dono
+  aberto          Boolean    @default(false)
 }
 
 model Produto {

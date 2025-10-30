@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, Modal, TextInput } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { getMeusEstabelecimentos, deleteEstabelecimento } from '../services/estabelecimentoService';
+import { getMeusEstabelecimentos, deleteEstabelecimento, setAbertoEstabelecimento } from '../services/estabelecimentoService';
 import { Snackbar } from 'react-native-paper';
 
 type Estabelecimento = {
@@ -9,6 +9,7 @@ type Estabelecimento = {
   nome: string;
   descricao: string;
   endereco: string;
+  aberto?: boolean;
 };
 
 const DonoDashboardScreen: React.FC = () => {
@@ -78,6 +79,32 @@ const DonoDashboardScreen: React.FC = () => {
               <Text style={styles.name}>{item.nome}</Text>
               <Text style={styles.desc}>{item.descricao}</Text>
               <Text style={styles.address}>{item.endereco}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
+              <View style={{
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 999,
+                backgroundColor: item.aberto ? '#E6F4EA' : '#F1F2F4',
+                marginRight: 8,
+              }}>
+                <Text style={{ color: item.aberto ? '#1E7F34' : '#666', fontWeight: 'bold', fontSize: 12 }}>
+                  {item.aberto ? 'Aberto' : 'Fechado'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: item.aberto ? '#D32F2F' : '#2E7D32', marginTop: 0, paddingVertical: 8 }]}
+                onPress={async () => {
+                  try {
+                    await setAbertoEstabelecimento(item.id, !item.aberto);
+                    setEstabelecimentos((prev) => prev.map((e) => e.id === item.id ? { ...e, aberto: !item.aberto } : e));
+                  } catch {
+                    setSnackbar({ visible: true, message: 'Erro ao alternar aberto/fechado', type: 'error' });
+                  }
+                }}
+              >
+                <Text style={styles.buttonText}>{item.aberto ? 'Fechar' : 'Abrir'}</Text>
+              </TouchableOpacity>
+            </View>
               <TouchableOpacity style={[styles.button, { backgroundColor: '#FFA500', marginTop: 8 }]} onPress={() => navigation.navigate('EditarEstabelecimento' as never, { estabelecimento: item } as never)}>
                 <Text style={styles.buttonText}>Editar</Text>
               </TouchableOpacity>

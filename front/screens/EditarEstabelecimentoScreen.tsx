@@ -23,6 +23,9 @@ const EditarEstabelecimentoScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>(estabelecimento.categorias ? estabelecimento.categorias.map((c: Categoria) => c.id) : []);
+  const [diasAbertos, setDiasAbertos] = useState<number[]>(estabelecimento.diasAbertos || [1,2,3,4,5]);
+  const [horaAbertura, setHoraAbertura] = useState<string>(estabelecimento.horaAbertura || '09:00');
+  const [horaFechamento, setHoraFechamento] = useState<string>(estabelecimento.horaFechamento || '18:00');
 
   React.useEffect(() => {
     getCategorias().then(setCategorias);
@@ -52,7 +55,7 @@ const EditarEstabelecimentoScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      await updateEstabelecimento(estabelecimento.id, {
+      const payload: Estabelecimento = {
         nome,
         descricao,
         endereco,
@@ -62,7 +65,11 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
         categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)),
-      });
+        diasAbertos,
+        horaAbertura,
+        horaFechamento,
+      };
+      await updateEstabelecimento(estabelecimento.id, payload);
       setSnackbar({ visible: true, message: 'Estabelecimento atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -83,7 +90,7 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         <Text style={{ marginTop: 12, color: '#888' }}>Carregando categorias...</Text>
       </View>
     ) : (
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Editar Estabelecimento</Text>
         <TextInput
           style={styles.input}
@@ -126,6 +133,44 @@ const EditarEstabelecimentoScreen: React.FC = () => {
           onChangeText={setTaxaEntrega}
           keyboardType="numeric"
         />
+        <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Dias e horário de funcionamento</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+          {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (
+            <TouchableOpacity
+              key={label}
+              onPress={() => setDiasAbertos((prev) => prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx])}
+              style={{
+                backgroundColor: diasAbertos.includes(idx) ? '#e5293e' : '#f6f6f6',
+                borderRadius: 18,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                marginRight: 8,
+                marginBottom: 8,
+                borderWidth: 1,
+                borderColor: diasAbertos.includes(idx) ? '#e5293e' : '#eee',
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: diasAbertos.includes(idx) ? '#fff' : '#222', fontWeight: 'bold' }}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Abertura (HH:mm)"
+            value={horaAbertura}
+            onChangeText={setHoraAbertura}
+            keyboardType="numbers-and-punctuation"
+          />
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            placeholder="Fechamento (HH:mm)"
+            value={horaFechamento}
+            onChangeText={setHoraFechamento}
+            keyboardType="numbers-and-punctuation"
+          />
+        </View>
         {/* Seleção de categorias dinâmicas */}
         <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Categorias (até 3):</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>

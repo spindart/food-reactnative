@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export class EstabelecimentoController {
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem, diasAbertos, horaAbertura, horaFechamento, aberto } = req.body;
       // Pega o id do usuário autenticado (dono)
       const user = (req as any).user;
       if (!user || user.role !== 'dono') {
@@ -40,6 +40,10 @@ export class EstabelecimentoController {
           taxaEntrega: taxaEntrega ?? 5.0,
           categorias: { connect: categoriaConnect },
           imagem: imagem ?? undefined,
+          diasAbertos: Array.isArray(diasAbertos) ? diasAbertos.map((d: any) => Number(d)).filter((n: number) => !isNaN(n)) : [],
+          horaAbertura: horaAbertura ?? null,
+          horaFechamento: horaFechamento ?? null,
+          aberto: Boolean(aberto) || false,
         },
         include: { categorias: true },
       });
@@ -54,7 +58,7 @@ export class EstabelecimentoController {
   static async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, diasAbertos, horaAbertura, horaFechamento, aberto } = req.body;
       if (categorias && categorias.length > 3) {
         res.status(400).json({ error: 'Selecione no máximo 3 categorias.' });
         return;
@@ -81,6 +85,10 @@ export class EstabelecimentoController {
           tempoEntregaMax,
           taxaEntrega,
           categorias: categorias ? { set: categoriaConnect } : undefined,
+          diasAbertos: Array.isArray(diasAbertos) ? diasAbertos.map((d: any) => Number(d)).filter((n: number) => !isNaN(n)) : undefined,
+          horaAbertura: typeof horaAbertura === 'string' ? horaAbertura : undefined,
+          horaFechamento: typeof horaFechamento === 'string' ? horaFechamento : undefined,
+          aberto: typeof aberto === 'boolean' ? aberto : undefined,
         },
         include: { categorias: true },
       });
@@ -96,6 +104,7 @@ export class EstabelecimentoController {
     try {
       const estabelecimentos = await prisma.estabelecimento.findMany({
         include: { categorias: true },
+        orderBy: [{ aberto: 'desc' }, { nome: 'asc' }],
       });
       res.json(estabelecimentos);
       return;
@@ -154,6 +163,28 @@ export class EstabelecimentoController {
       return;
     } catch (error) {
       res.status(500).json({ error: 'Erro ao buscar estabelecimentos do dono', details: error });
+      return;
+    }
+  }
+
+  static async setAberto(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { aberto } = req.body as { aberto: boolean };
+      const user = (req as any).user;
+      if (!user || user.role !== 'dono') {
+        res.status(403).json({ error: 'Apenas donos podem alterar disponibilidade.' });
+        return;
+      }
+      const estabelecimento = await prisma.estabelecimento.update({
+        where: { id: Number(id) },
+        data: { aberto },
+        include: { categorias: true },
+      });
+      res.json(estabelecimento);
+      return;
+    } catch (error) {
+      res.status(400).json({ error: 'Erro ao atualizar disponibilidade', details: error });
       return;
     }
   }

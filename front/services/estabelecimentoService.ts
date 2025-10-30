@@ -13,6 +13,13 @@ export type Estabelecimento = {
   taxaEntrega?: number;
   categorias?: Categoria[];
   imagem?: string;
+  // Dias da semana que abre (0 = Dom, 6 = Sáb)
+  diasAbertos?: number[];
+  // Horários gerais (HH:mm)
+  horaAbertura?: string;
+  horaFechamento?: string;
+  // Flag manual (controlada pelo dono)
+  aberto?: boolean;
 };
 
 export const getAllEstabelecimentos = async () => {
@@ -51,6 +58,16 @@ export const updateEstabelecimento = async (id: string, data: Estabelecimento) =
     return response.data;
   } catch (error) {
     console.error('Erro ao atualizar estabelecimento:', error);
+    throw error;
+  }
+};
+
+export const setAbertoEstabelecimento = async (id: string, aberto: boolean) => {
+  try {
+    const response = await api.patch(`/estabelecimentos/${id}/aberto`, { aberto });
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao alternar disponibilidade:', error);
     throw error;
   }
 };

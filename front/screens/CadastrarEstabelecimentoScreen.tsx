@@ -7,6 +7,7 @@ import { getCategorias, Categoria } from '../services/categoriaService';
 import * as ImagePicker from 'expo-image-picker';
 import AddressInput from '../components/AddressInput';
 import { AddressSuggestion } from '../services/geolocationService';
+import { Estabelecimento } from '../services/estabelecimentoService';
 
 const CadastrarEstabelecimentoScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -23,6 +24,9 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<string[]>([]);
   const [imagem, setImagem] = useState<string>('');
+  const [diasAbertos, setDiasAbertos] = useState<number[]>([1,2,3,4,5]);
+  const [horaAbertura, setHoraAbertura] = useState('09:00');
+  const [horaFechamento, setHoraFechamento] = useState('18:00');
 
   React.useEffect(() => {
     getCategorias().then(setCategorias);
@@ -73,7 +77,7 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
     // }
     setLoading(true);
     try {
-      await createEstabelecimento({
+      const payload: Estabelecimento = {
         nome,
         descricao,
         endereco,
@@ -84,7 +88,11 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         taxaEntrega: Number(taxaEntrega),
         categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)),
         imagem,
-      });
+        diasAbertos,
+        horaAbertura,
+        horaFechamento,
+      };
+      await createEstabelecimento(payload);
       setSnackbar({ visible: true, message: 'Estabelecimento cadastrado com sucesso!', type: 'success' });
       setTimeout(() => {
         setSnackbar((prev) => ({ ...prev, visible: false }));
@@ -99,7 +107,7 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Cadastrar Estabelecimento</Text>
       <TextInput
         style={styles.input}
@@ -142,6 +150,44 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
         onChangeText={setTaxaEntrega}
         keyboardType="numeric"
       />
+      <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Dias e horário de funcionamento</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+        {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (
+          <TouchableOpacity
+            key={label}
+            onPress={() => setDiasAbertos((prev) => prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx])}
+            style={{
+              backgroundColor: diasAbertos.includes(idx) ? '#e5293e' : '#f6f6f6',
+              borderRadius: 18,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              marginRight: 8,
+              marginBottom: 8,
+              borderWidth: 1,
+              borderColor: diasAbertos.includes(idx) ? '#e5293e' : '#eee',
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={{ color: diasAbertos.includes(idx) ? '#fff' : '#222', fontWeight: 'bold' }}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          placeholder="Abertura (HH:mm)"
+          value={horaAbertura}
+          onChangeText={setHoraAbertura}
+          keyboardType="numbers-and-punctuation"
+        />
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          placeholder="Fechamento (HH:mm)"
+          value={horaFechamento}
+          onChangeText={setHoraFechamento}
+          keyboardType="numbers-and-punctuation"
+        />
+      </View>
       {/* Seleção de categorias dinâmicas */}
       <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Categorias (até 3):</Text>
       <View style={{ maxHeight: 180 }}>
@@ -191,12 +237,12 @@ const CadastrarEstabelecimentoScreen: React.FC = () => {
       >
         {snackbar.message}
       </Snackbar>
-    </View>
+    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: '#fff' },
+  container: { flexGrow: 1, justifyContent: 'flex-start', padding: 16, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 24 },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 12, marginBottom: 8 },
   button: { backgroundColor: '#007BFF', padding: 12, borderRadius: 4, alignItems: 'center', marginBottom: 16 },
