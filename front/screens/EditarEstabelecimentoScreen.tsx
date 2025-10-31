@@ -26,6 +26,8 @@ const EditarEstabelecimentoScreen: React.FC = () => {
   const [diasAbertos, setDiasAbertos] = useState<number[]>(estabelecimento.diasAbertos || [1,2,3,4,5]);
   const [horaAbertura, setHoraAbertura] = useState<string>(estabelecimento.horaAbertura || '09:00');
   const [horaFechamento, setHoraFechamento] = useState<string>(estabelecimento.horaFechamento || '18:00');
+  const [freteGratisAtivado, setFreteGratisAtivado] = useState<boolean>(estabelecimento.freteGratisAtivado || false);
+  const [valorMinimoFreteGratis, setValorMinimoFreteGratis] = useState<string>(estabelecimento.valorMinimoFreteGratis?.toString() || '');
 
   React.useEffect(() => {
     getCategorias().then(setCategorias);
@@ -55,7 +57,31 @@ const EditarEstabelecimentoScreen: React.FC = () => {
     }
     setLoading(true);
     try {
-      const payload: Estabelecimento = {
+      // Preparar valor mínimo para frete grátis
+      let valorMinimo = null;
+      if (freteGratisAtivado && valorMinimoFreteGratis && valorMinimoFreteGratis.trim() !== '') {
+        const valor = Number(valorMinimoFreteGratis);
+        if (!isNaN(valor) && valor > 0) {
+          valorMinimo = valor;
+        }
+      }
+      
+      console.log('📤 Enviando dados de frete grátis:', {
+        freteGratisAtivado,
+        valorMinimoFreteGratis,
+        valorMinimo
+      });
+      
+      // Converter categorias para nomes (backend espera array de strings)
+      const categoriasNomes = categorias
+        .filter((c) => categoriasSelecionadas.includes(c.id))
+        .map((c) => c.nome);
+      
+      // Garantir que os campos de frete grátis sempre sejam enviados
+      const freteGratisAtivadoValue = Boolean(freteGratisAtivado);
+      const valorMinimoValue = valorMinimo !== null && valorMinimo !== undefined ? valorMinimo : null;
+      
+      const payload: any = {
         nome,
         descricao,
         endereco,
@@ -64,11 +90,22 @@ const EditarEstabelecimentoScreen: React.FC = () => {
         tempoEntregaMin: Number(tempoEntregaMin),
         tempoEntregaMax: Number(tempoEntregaMax),
         taxaEntrega: Number(taxaEntrega),
-        categorias: categorias.filter((c) => categoriasSelecionadas.includes(c.id)),
+        categorias: categoriasNomes, // Array de nomes (strings)
         diasAbertos,
         horaAbertura,
         horaFechamento,
+        freteGratisAtivado: freteGratisAtivadoValue,
+        valorMinimoFreteGratis: valorMinimoValue,
       };
+      
+      console.log('📤 Payload completo enviado:', JSON.stringify(payload, null, 2));
+      console.log('📤 Campos de frete:', {
+        freteGratisAtivado: payload.freteGratisAtivado,
+        tipoFrete: typeof payload.freteGratisAtivado,
+        valorMinimoFreteGratis: payload.valorMinimoFreteGratis,
+        tipoValor: typeof payload.valorMinimoFreteGratis
+      });
+      
       await updateEstabelecimento(estabelecimento.id, payload);
       setSnackbar({ visible: true, message: 'Estabelecimento atualizado com sucesso!', type: 'success' });
       setTimeout(() => {
@@ -133,6 +170,40 @@ const EditarEstabelecimentoScreen: React.FC = () => {
           onChangeText={setTaxaEntrega}
           keyboardType="numeric"
         />
+        {/* Configuração de Frete Grátis */}
+        <View style={{ marginBottom: 16 }}>
+          <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Frete Grátis</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <TouchableOpacity
+              onPress={() => setFreteGratisAtivado(!freteGratisAtivado)}
+              style={{
+                width: 24,
+                height: 24,
+                borderWidth: 2,
+                borderColor: freteGratisAtivado ? '#007BFF' : '#ccc',
+                borderRadius: 4,
+                backgroundColor: freteGratisAtivado ? '#007BFF' : '#fff',
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 8,
+              }}
+            >
+              {freteGratisAtivado && (
+                <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✓</Text>
+              )}
+            </TouchableOpacity>
+            <Text style={{ flex: 1 }}>Ativar frete grátis</Text>
+          </View>
+          {freteGratisAtivado && (
+            <TextInput
+              style={styles.input}
+              placeholder="Valor mínimo para frete grátis (R$)"
+              value={valorMinimoFreteGratis}
+              onChangeText={setValorMinimoFreteGratis}
+              keyboardType="numeric"
+            />
+          )}
+        </View>
         <Text style={{ fontWeight: 'bold', marginBottom: 8 }}>Dias e horário de funcionamento</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
           {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (

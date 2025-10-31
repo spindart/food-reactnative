@@ -22,6 +22,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const [categorias, setCategorias] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalProduto, setModalProduto] = useState<any | null>(null);
+  const [modalEstabelecimentoVisible, setModalEstabelecimentoVisible] = useState(false);
   const [quantidade, setQuantidade] = useState(1);
   const [observacao, setObservacao] = useState('');
   const { state: cartState } = useCart();
@@ -168,6 +169,14 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const totalCart = cartState.items.reduce((sum, item) => sum + item.preco * item.quantidade, 0);
   const qtdCart = cartState.items.reduce((sum, item) => sum + item.quantidade, 0);
 
+  // Função para formatar dias da semana
+  const getDiasSemana = (dias: number[]): string => {
+    const diasNomes = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    if (!dias || dias.length === 0) return 'Não informado';
+    if (dias.length === 7) return 'Todos os dias';
+    return dias.map(d => diasNomes[d]).join(', ');
+  };
+
   return (
     <View className="flex-1 bg-gray-50">
       {/* Header com Banner e Botão Voltar */}
@@ -183,17 +192,22 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
         {/* Botão voltar sobreposto */}
         <TouchableOpacity
           onPress={() => navigation.goBack()}
-          className="absolute top-12 left-4 bg-white rounded-full p-2 shadow-lg"
+          className="absolute top-12 left-4 bg-white rounded-full p-2 shadow-lg z-10"
           activeOpacity={0.8}
         >
           <Ionicons name="arrow-back" size={20} color="#ea1d2c" />
         </TouchableOpacity>
         
         {/* Informações do estabelecimento sobre o banner */}
-        <View className="absolute bottom-4 left-4 right-4">
-          <Text className="text-white text-2xl font-bold mb-2 shadow-lg">
-            {estabelecimento.nome}
-          </Text>
+        <View className="absolute bottom-4 left-4 right-4 pl-14">
+          <TouchableOpacity 
+            onPress={() => setModalEstabelecimentoVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Text className="text-white text-2xl font-bold mb-2 shadow-lg">
+              {estabelecimento.nome}
+            </Text>
+          </TouchableOpacity>
           
           {/* Informações adicionais */}
           <View className="flex-row items-center flex-wrap">
@@ -218,7 +232,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
             )}
             
             {/* Grátis se taxa for 0 */}
-            {typeof estabelecimento.taxaEntrega === 'number' && estabelecimento.taxaEntrega === 0 && (
+            {typeof estabelecimento.taxaEntrega === 'number' && estabelecimento.taxaEntrega === 0 && !estabelecimento.freteGratisAtivado && (
               <View className="flex-row items-center">
                 <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                 <Text className="text-white text-sm font-medium ml-1 shadow-lg">
@@ -228,12 +242,22 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
             )}
           </View>
           
-          {/* Descrição do estabelecimento */}
+          {/* Informação de frete grátis a partir de valor mínimo */}
+          {estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis && (
+            <View className="flex-row items-center mt-2">
+              <Ionicons name="gift-outline" size={16} color="#4ade80" />
+              <Text className="text-green-400 text-sm font-semibold ml-1 shadow-lg">
+                Frete Grátis a partir de R$ {estabelecimento.valorMinimoFreteGratis.toFixed(2).replace('.', ',')}
+              </Text>
+            </View>
+          )}
+          
+          {/* Descrição do estabelecimento
           {estabelecimento.descricao && (
             <Text className="text-white text-xs mt-2 opacity-90 shadow-lg" numberOfLines={2}>
               {estabelecimento.descricao}
             </Text>
-          )}
+          )} */}
         </View>
       </View>
 
@@ -333,7 +357,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
                   <Text className="text-lg font-semibold text-red-500">R$ {item.preco.toFixed(2).replace('.', ',')}</Text>
                 </View>
                 {isDono ? (
-                  <TouchableOpacity onPress={() => navigation.navigate('EditarProduto', { produto: item })} className="bg-blue-500 px-3 py-1.5 rounded-full self-start mt-2" activeOpacity={0.8}>
+                  <TouchableOpacity onPress={() => (navigation as any).navigate('EditarProduto', { produto: item })} className="bg-blue-500 px-3 py-1.5 rounded-full self-start mt-2" activeOpacity={0.8}>
                     <Text className="text-white text-sm font-semibold">Editar</Text>
                   </TouchableOpacity>
                 ) : (
@@ -350,7 +374,7 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
       {/* Bottom Bar - Carrinho Fixo */}
       {qtdCart > 0 && (
         <TouchableOpacity
-          onPress={() => navigation.navigate('HomeTabs', { screen: 'Carrinho' })}
+          onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Carrinho' })}
           className="absolute bottom-0 left-0 right-0 bg-red-500 rounded-t-3xl px-6 py-4 shadow-2xl"
           activeOpacity={0.9}
         >
@@ -446,6 +470,161 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
                 </Pressable>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de informações do estabelecimento */}
+      <Modal 
+        visible={modalEstabelecimentoVisible} 
+        transparent 
+        animationType="slide"
+        onRequestClose={() => setModalEstabelecimentoVisible(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <Pressable 
+            className="flex-1" 
+            onPress={() => setModalEstabelecimentoVisible(false)}
+          />
+          <View className="bg-white rounded-t-3xl max-h-[85%]">
+            <ScrollView className="px-6 py-6" showsVerticalScrollIndicator={false}>
+              {/* Header do modal */}
+              <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-2xl font-bold text-gray-800">Informações do Estabelecimento</Text>
+                <TouchableOpacity 
+                  onPress={() => setModalEstabelecimentoVisible(false)}
+                  className="bg-gray-100 rounded-full p-2"
+                >
+                  <Ionicons name="close" size={24} color="#666" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Nome */}
+              <View className="mb-4">
+                <Text className="text-lg font-bold text-gray-800 mb-1">Nome</Text>
+                <Text className="text-base text-gray-600">{estabelecimento.nome}</Text>
+              </View>
+
+              {/* Descrição */}
+              {estabelecimento.descricao && (
+                <View className="mb-4">
+                  <Text className="text-lg font-bold text-gray-800 mb-1">Descrição</Text>
+                  <Text className="text-base text-gray-600">{estabelecimento.descricao}</Text>
+                </View>
+              )}
+
+              {/* Endereço */}
+              {estabelecimento.endereco && (
+                <View className="mb-4">
+                  <View className="flex-row items-start mb-1">
+                    <Ionicons name="location-outline" size={20} color="#ea1d2c" />
+                    <Text className="text-lg font-bold text-gray-800 ml-2">Endereço</Text>
+                  </View>
+                  <Text className="text-base text-gray-600 ml-7">{estabelecimento.endereco}</Text>
+                </View>
+              )}
+
+              {/* Horários de funcionamento */}
+              <View className="mb-4">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="time-outline" size={20} color="#ea1d2c" />
+                  <Text className="text-lg font-bold text-gray-800 ml-2">Horários de Funcionamento</Text>
+                </View>
+                {estabelecimento.diasAbertos && estabelecimento.diasAbertos.length > 0 && (
+                  <View className="ml-7">
+                    {estabelecimento.horaAbertura && estabelecimento.horaFechamento ? (
+                      <Text className="text-base text-gray-600">
+                        {getDiasSemana(estabelecimento.diasAbertos)}: {estabelecimento.horaAbertura} - {estabelecimento.horaFechamento}
+                      </Text>
+                    ) : (
+                      <Text className="text-base text-gray-600">
+                        {getDiasSemana(estabelecimento.diasAbertos)}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* Taxa de entrega e Frete Grátis */}
+              <View className="mb-4">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons name="bicycle-outline" size={20} color="#ea1d2c" />
+                  <Text className="text-lg font-bold text-gray-800 ml-2">Entrega</Text>
+                </View>
+                <View className="ml-7">
+                  {typeof estabelecimento.taxaEntrega === 'number' && estabelecimento.taxaEntrega > 0 && (
+                    <Text className="text-base text-gray-600 mb-1">
+                      Taxa de entrega: R$ {estabelecimento.taxaEntrega.toFixed(2).replace('.', ',')}
+                    </Text>
+                  )}
+                  {estabelecimento.tempoEntregaMin && estabelecimento.tempoEntregaMax && (
+                    <Text className="text-base text-gray-600 mb-1">
+                      Tempo estimado: {estabelecimento.tempoEntregaMin} - {estabelecimento.tempoEntregaMax} min
+                    </Text>
+                  )}
+                  {estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis ? (
+                    <View className="flex-row items-center mt-2">
+                      <Ionicons name="gift-outline" size={18} color="#22c55e" />
+                      <Text className="text-base font-semibold text-green-600 ml-1">
+                        Frete Grátis a partir de R$ {estabelecimento.valorMinimoFreteGratis.toFixed(2).replace('.', ',')}
+                      </Text>
+                    </View>
+                  ) : estabelecimento.taxaEntrega === 0 && (
+                    <View className="flex-row items-center mt-2">
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
+                      <Text className="text-base font-semibold text-green-600 ml-1">
+                        Entrega grátis
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Categorias */}
+              {estabelecimento.categorias && estabelecimento.categorias.length > 0 && (
+                <View className="mb-4">
+                  <View className="flex-row items-center mb-2">
+                    <Ionicons name="pricetag-outline" size={20} color="#ea1d2c" />
+                    <Text className="text-lg font-bold text-gray-800 ml-2">Categorias</Text>
+                  </View>
+                  <View className="ml-7 flex-row flex-wrap">
+                    {estabelecimento.categorias.map((cat: any, index: number) => (
+                      <View 
+                        key={cat.id || index}
+                        className="bg-blue-100 px-3 py-1 rounded-full mr-2 mb-2"
+                      >
+                        <Text className="text-blue-700 text-sm font-semibold">
+                          {cat.nome}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Status */}
+              <View className="mb-6">
+                <View className="flex-row items-center mb-2">
+                  <Ionicons 
+                    name={estabelecimento.aberto ? "checkmark-circle" : "close-circle"} 
+                    size={20} 
+                    color={estabelecimento.aberto ? "#22c55e" : "#ef4444"} 
+                  />
+                  <Text className="text-lg font-bold text-gray-800 ml-2">Status</Text>
+                </View>
+                <View className="ml-7">
+                  <View className={`px-3 py-1 rounded-full self-start ${
+                    estabelecimento.aberto ? 'bg-green-100' : 'bg-red-100'
+                  }`}>
+                    <Text className={`font-bold ${
+                      estabelecimento.aberto ? 'text-green-700' : 'text-red-700'
+                    }`}>
+                      {estabelecimento.aberto ? 'Aberto' : 'Fechado'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>

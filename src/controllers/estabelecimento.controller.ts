@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 export class EstabelecimentoController {
   static async create(req: Request, res: Response): Promise<void> {
     try {
-      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem, diasAbertos, horaAbertura, horaFechamento, aberto } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, imagem, diasAbertos, horaAbertura, horaFechamento, aberto, freteGratisAtivado, valorMinimoFreteGratis } = req.body;
       // Pega o id do usuário autenticado (dono)
       const user = (req as any).user;
       if (!user || user.role !== 'dono') {
@@ -44,6 +44,10 @@ export class EstabelecimentoController {
           horaAbertura: horaAbertura ?? null,
           horaFechamento: horaFechamento ?? null,
           aberto: Boolean(aberto) || false,
+          freteGratisAtivado: freteGratisAtivado !== undefined ? Boolean(freteGratisAtivado) : false,
+          valorMinimoFreteGratis: valorMinimoFreteGratis !== undefined && valorMinimoFreteGratis !== null && valorMinimoFreteGratis !== '' 
+            ? Number(valorMinimoFreteGratis) 
+            : null,
         },
         include: { categorias: true },
       });
@@ -58,7 +62,15 @@ export class EstabelecimentoController {
   static async update(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, diasAbertos, horaAbertura, horaFechamento, aberto } = req.body;
+      const { nome, descricao, endereco, latitude, longitude, tempoEntregaMin, tempoEntregaMax, taxaEntrega, categorias, diasAbertos, horaAbertura, horaFechamento, aberto, freteGratisAtivado, valorMinimoFreteGratis } = req.body;
+      
+      console.log('📝 Dados recebidos no update:', {
+        id,
+        freteGratisAtivado,
+        valorMinimoFreteGratis,
+        tipoFreteGratis: typeof freteGratisAtivado,
+        tipoValorMinimo: typeof valorMinimoFreteGratis
+      });
       if (categorias && categorias.length > 3) {
         res.status(400).json({ error: 'Selecione no máximo 3 categorias.' });
         return;
@@ -73,29 +85,74 @@ export class EstabelecimentoController {
           })
         );
       }
+      // Preparar dados de atualização apenas com campos válidos
+      const updateData: any = {};
+      
+      if (nome !== undefined) updateData.nome = nome;
+      if (descricao !== undefined) updateData.descricao = descricao;
+      if (endereco !== undefined) updateData.endereco = endereco;
+      if (latitude !== undefined) updateData.latitude = latitude;
+      if (longitude !== undefined) updateData.longitude = longitude;
+      if (tempoEntregaMin !== undefined) updateData.tempoEntregaMin = tempoEntregaMin;
+      if (tempoEntregaMax !== undefined) updateData.tempoEntregaMax = tempoEntregaMax;
+      if (taxaEntrega !== undefined) updateData.taxaEntrega = taxaEntrega;
+      if (categorias) updateData.categorias = { set: categoriaConnect };
+      if (diasAbertos !== undefined && Array.isArray(diasAbertos)) {
+        updateData.diasAbertos = diasAbertos.map((d: any) => Number(d)).filter((n: number) => !isNaN(n));
+      }
+      if (horaAbertura !== undefined && typeof horaAbertura === 'string') updateData.horaAbertura = horaAbertura;
+      if (horaFechamento !== undefined && typeof horaFechamento === 'string') updateData.horaFechamento = horaFechamento;
+      if (typeof aberto === 'boolean') updateData.aberto = aberto;
+      
+      // Tratar campos de frete grátis - SEMPRE atualizar se enviado
+      // Isso garante que false também seja salvo (não apenas true)
+      if (freteGratisAtivado !== undefined) {
+        updateData.freteGratisAtivado = Boolean(freteGratisAtivado);
+        console.log('✅ freteGratisAtivado será atualizado para:', updateData.freteGratisAtivado);
+      } else {
+        console.log('⚠️ freteGratisAtivado não foi enviado (undefined)');
+      }
+      
+      // Tratar valorMinimoFreteGratis - SEMPRE atualizar se enviado (incluindo null)
+      if (valorMinimoFreteGratis !== undefined) {
+        if (valorMinimoFreteGratis === null || valorMinimoFreteGratis === '' || valorMinimoFreteGratis === 'null') {
+          updateData.valorMinimoFreteGratis = null;
+          console.log('✅ valorMinimoFreteGratis será atualizado para: null');
+        } else {
+          const valor = Number(valorMinimoFreteGratis);
+          if (!isNaN(valor) && valor > 0) {
+            updateData.valorMinimoFreteGratis = valor;
+            console.log('✅ valorMinimoFreteGratis será atualizado para:', valor);
+          } else {
+            updateData.valorMinimoFreteGratis = null;
+            console.log('⚠️ valorMinimoFreteGratis inválido, será atualizado para: null');
+          }
+        }
+      } else {
+        console.log('⚠️ valorMinimoFreteGratis não foi enviado (undefined)');
+      }
+      
+      console.log('📦 Dados de atualização preparados:', JSON.stringify(updateData, null, 2));
+      
       const estabelecimento = await prisma.estabelecimento.update({
         where: { id: Number(id) },
-        data: {
-          nome,
-          descricao,
-          endereco,
-          latitude,
-          longitude,
-          tempoEntregaMin,
-          tempoEntregaMax,
-          taxaEntrega,
-          categorias: categorias ? { set: categoriaConnect } : undefined,
-          diasAbertos: Array.isArray(diasAbertos) ? diasAbertos.map((d: any) => Number(d)).filter((n: number) => !isNaN(n)) : undefined,
-          horaAbertura: typeof horaAbertura === 'string' ? horaAbertura : undefined,
-          horaFechamento: typeof horaFechamento === 'string' ? horaFechamento : undefined,
-          aberto: typeof aberto === 'boolean' ? aberto : undefined,
-        },
+        data: updateData,
         include: { categorias: true },
       });
+      
+      console.log('✅ Estabelecimento atualizado:', {
+        id: estabelecimento.id,
+        freteGratisAtivado: estabelecimento.freteGratisAtivado,
+        valorMinimoFreteGratis: estabelecimento.valorMinimoFreteGratis
+      });
+      
       res.json(estabelecimento);
       return;
-    } catch (error) {
-      res.status(400).json({ error: 'Erro ao atualizar estabelecimento', details: error });
+    } catch (error: any) {
+      console.error('Erro ao atualizar estabelecimento:', error);
+      const errorMessage = error?.message || 'Erro ao atualizar estabelecimento';
+      const errorDetails = error?.meta || error?.code || error;
+      res.status(400).json({ error: errorMessage, details: errorDetails });
       return;
     }
   }

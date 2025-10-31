@@ -94,7 +94,13 @@ export class PedidoController {
           observacao: (p as any).observacao || null,
         };
       });
-      const taxaEntrega = estabelecimento.taxaEntrega || 0;
+      
+      // Calcular taxa de entrega considerando frete grátis
+      let taxaEntrega = estabelecimento.taxaEntrega || 0;
+      if (estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis && subtotal >= estabelecimento.valorMinimoFreteGratis) {
+        taxaEntrega = 0;
+      }
+      
       const totalCalculado = subtotal + taxaEntrega;
       
       console.log('🔍 Debug - Validação de total:');

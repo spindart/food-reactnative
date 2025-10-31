@@ -14,6 +14,7 @@ const FormaPagamentoScreen: React.FC = () => {
   const { state: cartState } = useCart();
   const [formaPagamento, setFormaPagamento] = useState<'dinheiro' | 'cartao' | 'pix' | null>(null);
   const [taxaEntrega, setTaxaEntrega] = useState(0);
+  const [estabelecimento, setEstabelecimento] = useState<any>(null);
   const [cartoesSalvos, setCartoesSalvos] = useState<Cartao[]>([]);
   const [cartaoSelecionado, setCartaoSelecionado] = useState<Cartao | null>(null);
   const [usarCartaoSalvo, setUsarCartaoSalvo] = useState(false);
@@ -38,19 +39,43 @@ const FormaPagamentoScreen: React.FC = () => {
   useEffect(() => {
     loadCartoesSalvos();
     loadTaxaEntrega();
-  }, []);
+  }, [cartState.items]);
 
   const loadTaxaEntrega = () => {
     if (cartState.items.length > 0) {
       const estId = cartState.items[0].estabelecimentoId;
       if (estId) {
         getEstabelecimentoById(String(estId)).then((est) => {
-          if (est && est.taxaEntrega !== undefined && est.taxaEntrega !== null) {
-            setTaxaEntrega(Number(est.taxaEntrega));
+          if (est) {
+            setEstabelecimento(est);
+            const subtotal = cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0);
+            let taxa = est.taxaEntrega || 0;
+            
+            // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+            if (est.freteGratisAtivado && est.valorMinimoFreteGratis && subtotal >= est.valorMinimoFreteGratis) {
+              taxa = 0;
+            }
+            
+            setTaxaEntrega(taxa);
           }
         });
       }
     }
+  };
+
+  const calculateTaxaEntrega = () => {
+    if (!estabelecimento || route.params?.opcaoEntrega === 'retirada') {
+      return route.params?.taxaEntrega || 0;
+    }
+    
+    const subtotal = cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0);
+    
+    // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+    if (estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis && subtotal >= estabelecimento.valorMinimoFreteGratis) {
+      return 0;
+    }
+    
+    return estabelecimento.taxaEntrega || 0;
   };
 
   const loadCartoesSalvos = async () => {
@@ -163,7 +188,7 @@ const FormaPagamentoScreen: React.FC = () => {
     // Passar dados para próxima tela
     (navigation as any).navigate('RevisarPedido', {
       ...route.params,
-      taxaEntrega: taxaEntrega,
+      taxaEntrega: calculateTaxaEntrega(),
       formaPagamento,
       cartaoSelecionado,
       usarCartaoSalvo,
@@ -285,11 +310,20 @@ const FormaPagamentoScreen: React.FC = () => {
           </View>
           <View className="flex-row justify-between items-center py-1.5">
             <Text className="text-base text-gray-600 font-medium">Taxa de entrega</Text>
-            <Text className="text-base text-gray-800 font-semibold">R$ {taxaEntrega.toFixed(2)}</Text>
+            <View className="items-end">
+              {estabelecimento?.freteGratisAtivado && estabelecimento?.valorMinimoFreteGratis && cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) >= estabelecimento.valorMinimoFreteGratis ? (
+                <>
+                  <Text className="text-base text-green-600 font-semibold">Grátis</Text>
+                  <Text className="text-xs text-gray-500 line-through">R$ {(estabelecimento.taxaEntrega || 0).toFixed(2)}</Text>
+                </>
+              ) : (
+                <Text className="text-base text-gray-800 font-semibold">R$ {calculateTaxaEntrega().toFixed(2)}</Text>
+              )}
+            </View>
           </View>
           <View className="flex-row justify-between items-center py-3 mt-2 border-t border-gray-300">
             <Text className="text-lg font-bold text-gray-800">Total</Text>
-            <Text className="text-lg font-bold text-red-600">R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}</Text>
+            <Text className="text-lg font-bold text-red-600">R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + calculateTaxaEntrega()).toFixed(2)}</Text>
           </View>
         </View>
       </ScrollView>
@@ -302,7 +336,7 @@ const FormaPagamentoScreen: React.FC = () => {
           activeOpacity={0.8}
         >
           <Text className="text-white text-base font-bold">
-            Revisar pedido • R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + taxaEntrega).toFixed(2)}
+            Revisar pedido • R$ {(cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) + calculateTaxaEntrega()).toFixed(2)}
           </Text>
         </TouchableOpacity>
       </View>

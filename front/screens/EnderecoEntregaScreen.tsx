@@ -16,6 +16,7 @@ const EnderecoEntregaScreen: React.FC = () => {
   const [enderecoSelecionado, setEnderecoSelecionado] = useState<any>(null);
   const [opcaoEntrega, setOpcaoEntrega] = useState<'padrao' | 'retirada'>('padrao');
   const [taxaEntrega, setTaxaEntrega] = useState(0);
+  const [estabelecimento, setEstabelecimento] = useState<any>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
   
   const [newAddressLabel, setNewAddressLabel] = useState('');
@@ -27,19 +28,41 @@ const EnderecoEntregaScreen: React.FC = () => {
   useEffect(() => {
     loadEnderecos();
     loadTaxaEntrega();
-  }, []);
+  }, [cartState.items]);
 
   const loadTaxaEntrega = () => {
     if (cartState.items.length > 0) {
       const estId = cartState.items[0].estabelecimentoId;
       if (estId) {
         getEstabelecimentoById(String(estId)).then((est) => {
-          if (est && est.taxaEntrega !== undefined && est.taxaEntrega !== null) {
-            setTaxaEntrega(Number(est.taxaEntrega));
+          if (est) {
+            setEstabelecimento(est);
+            const subtotal = cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0);
+            let taxa = est.taxaEntrega || 0;
+            
+            // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+            if (est.freteGratisAtivado && est.valorMinimoFreteGratis && subtotal >= est.valorMinimoFreteGratis) {
+              taxa = 0;
+            }
+            
+            setTaxaEntrega(taxa);
           }
         });
       }
     }
+  };
+
+  const calculateTaxaEntrega = () => {
+    if (!estabelecimento || opcaoEntrega === 'retirada') return 0;
+    
+    const subtotal = cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0);
+    
+    // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+    if (estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis && subtotal >= estabelecimento.valorMinimoFreteGratis) {
+      return 0;
+    }
+    
+    return estabelecimento.taxaEntrega || 0;
   };
 
   const loadEnderecos = async () => {
@@ -110,7 +133,7 @@ const EnderecoEntregaScreen: React.FC = () => {
     (navigation as any).navigate('FormaPagamento', {
       endereco: enderecoSelecionado,
       opcaoEntrega: opcaoEntrega,
-      taxaEntrega: taxaEntrega
+      taxaEntrega: calculateTaxaEntrega()
     });
   };
 
@@ -188,7 +211,11 @@ const EnderecoEntregaScreen: React.FC = () => {
                 <Text className="text-sm text-gray-600">Hoje, 70 - 80min</Text>
               </View>
               <View className="flex-row items-center gap-3">
-                <Text className="text-base font-semibold text-gray-800">R$ {taxaEntrega.toFixed(2)}</Text>
+                {estabelecimento?.freteGratisAtivado && estabelecimento?.valorMinimoFreteGratis && cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0) >= estabelecimento.valorMinimoFreteGratis ? (
+                  <Text className="text-base font-semibold text-green-600">Grátis</Text>
+                ) : (
+                  <Text className="text-base font-semibold text-gray-800">R$ {calculateTaxaEntrega().toFixed(2)}</Text>
+                )}
                 <View className={`w-5 h-5 rounded-full border-2 ${
                   opcaoEntrega === 'padrao' ? 'bg-red-600 border-red-600' : 'border-gray-300'
                 }`} />
@@ -204,7 +231,7 @@ const EnderecoEntregaScreen: React.FC = () => {
           <View className="flex-1">
             <Text className="text-sm text-gray-600 mb-1">Total com a entrega</Text>
             <Text className="text-lg font-bold text-gray-800">
-              R$ {opcaoEntrega === 'padrao' ? (taxaEntrega + cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0)).toFixed(2) : cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0).toFixed(2)} / {cartState.items.length} item{cartState.items.length > 1 ? 's' : ''}
+              R$ {opcaoEntrega === 'padrao' ? (calculateTaxaEntrega() + cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0)).toFixed(2) : cartState.items.reduce((total, item) => total + item.preco * item.quantidade, 0).toFixed(2)} / {cartState.items.length} item{cartState.items.length > 1 ? 's' : ''}
             </Text>
           </View>
           <TouchableOpacity

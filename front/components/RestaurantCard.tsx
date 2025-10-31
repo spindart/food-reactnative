@@ -17,6 +17,8 @@ type Restaurant = {
   horaAbertura?: string; // HH:mm
   horaFechamento?: string; // HH:mm
   aberto?: boolean; // flag manual
+  freteGratisAtivado?: boolean;
+  valorMinimoFreteGratis?: number;
 };
 
 type Variant = 'vertical' | 'horizontal';
@@ -162,7 +164,13 @@ const RestaurantCard: React.FC<Props> = ({ restaurant, rating, onPress, variant 
                 {restaurant.tempoEntregaMin ?? '-'} - {restaurant.tempoEntregaMax ?? '-'} min
               </Text>
             </View>
-            {typeof restaurant.taxaEntrega === 'number' && (
+            {restaurant.freteGratisAtivado && restaurant.valorMinimoFreteGratis ? (
+              <View className="flex-row items-center">
+                <Text className="text-sm font-semibold text-green-600">
+                  • Frete Grátis a partir de R$ {restaurant.valorMinimoFreteGratis.toFixed(2)}
+                </Text>
+              </View>
+            ) : typeof restaurant.taxaEntrega === 'number' && (
               <Text className="text-sm font-semibold text-red-600">
                 • R$ {restaurant.taxaEntrega.toFixed(2)}
               </Text>

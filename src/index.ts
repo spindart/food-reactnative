@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import estabelecimentoRoutes from './routes/estabelecimento.routes';

@@ -20,9 +20,16 @@ const SacolaScreen: React.FC = () => {
         getEstabelecimentoById(String(estId)).then((est) => {
           if (est) {
             setEstabelecimento(est);
-            if (est.taxaEntrega !== undefined && est.taxaEntrega !== null) {
-              setTaxaEntrega(Number(est.taxaEntrega));
+            // Calcular taxa de entrega considerando frete grátis
+            const subtotal = cartItems.reduce((total, item) => total + item.preco * item.quantidade, 0);
+            let taxa = est.taxaEntrega || 0;
+            
+            // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+            if (est.freteGratisAtivado && est.valorMinimoFreteGratis && subtotal >= est.valorMinimoFreteGratis) {
+              taxa = 0;
             }
+            
+            setTaxaEntrega(taxa);
           }
         });
       }
@@ -36,9 +43,22 @@ const SacolaScreen: React.FC = () => {
     return cartItems.reduce((total, item) => total + item.preco * item.quantidade, 0);
   };
 
+  const calculateTaxaEntrega = () => {
+    if (!estabelecimento) return taxaEntrega;
+    
+    const subtotal = calculateSubtotal();
+    
+    // Verificar se frete grátis está ativado e se o subtotal atinge o valor mínimo
+    if (estabelecimento.freteGratisAtivado && estabelecimento.valorMinimoFreteGratis && subtotal >= estabelecimento.valorMinimoFreteGratis) {
+      return 0;
+    }
+    
+    return taxaEntrega;
+  };
+
   const calculateTotal = () => {
     const subtotal = calculateSubtotal();
-    return subtotal + taxaEntrega;
+    return subtotal + calculateTaxaEntrega();
   };
 
   const handleRemoveItem = (cartItemId: string) => {
@@ -174,7 +194,16 @@ const SacolaScreen: React.FC = () => {
             </View>
             <View className="flex-row justify-between items-center py-1.5">
               <Text className="text-base text-gray-600 font-medium">Taxa de entrega</Text>
-              <Text className="text-base text-gray-800 font-semibold">R$ {taxaEntrega.toFixed(2)}</Text>
+              <View className="items-end">
+                {estabelecimento?.freteGratisAtivado && estabelecimento?.valorMinimoFreteGratis && calculateSubtotal() >= estabelecimento.valorMinimoFreteGratis ? (
+                  <>
+                    <Text className="text-base text-green-600 font-semibold">Grátis</Text>
+                    <Text className="text-xs text-gray-500 line-through">R$ {taxaEntrega.toFixed(2)}</Text>
+                  </>
+                ) : (
+                  <Text className="text-base text-gray-800 font-semibold">R$ {calculateTaxaEntrega().toFixed(2)}</Text>
+                )}
+              </View>
             </View>
             <View className="flex-row justify-between items-center py-3 mt-2 border-t border-gray-300">
               <Text className="text-lg font-bold text-gray-800">Total</Text>

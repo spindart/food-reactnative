@@ -20,6 +20,9 @@ export type Estabelecimento = {
   horaFechamento?: string;
   // Flag manual (controlada pelo dono)
   aberto?: boolean;
+  // Configuração de frete grátis
+  freteGratisAtivado?: boolean;
+  valorMinimoFreteGratis?: number;
 };
 
 export const getAllEstabelecimentos = async () => {
@@ -52,8 +55,14 @@ export const createEstabelecimento = async (data: Estabelecimento) => {
   }
 };
 
-export const updateEstabelecimento = async (id: string, data: Estabelecimento) => {
+export const updateEstabelecimento = async (id: string, data: Estabelecimento | any) => {
   try {
+    console.log('📡 Serviço: Enviando dados para atualização:', {
+      id,
+      freteGratisAtivado: data.freteGratisAtivado,
+      valorMinimoFreteGratis: data.valorMinimoFreteGratis,
+      categorias: data.categorias
+    });
     const response = await api.put(`/estabelecimentos/${id}`, data);
     return response.data;
   } catch (error) {

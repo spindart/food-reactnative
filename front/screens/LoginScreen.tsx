@@ -49,10 +49,24 @@ const LoginScreen: React.FC = () => {
           navigation.navigate('HomeTabs');
         }
       }, 1500);
-    } catch (error) {
-      setSnackbar({ visible: true, message: 'E-mail ou senha inválidos.', type: 'error' });
-      setTimeout(() => setSnackbar((prev) => ({ ...prev, visible: false })), 2000);
+    } catch (error: any) {
       console.error('Erro ao fazer login:', error);
+      
+      // Extrair mensagem de erro mais específica
+      let errorMessage = 'E-mail ou senha inválidos.';
+      
+      if (error?.response?.status === 401) {
+        errorMessage = 'E-mail ou senha inválidos.';
+      } else if (error?.response?.status === 500) {
+        errorMessage = error?.response?.data?.error || 'Erro no servidor. Tente novamente.';
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      setSnackbar({ visible: true, message: errorMessage, type: 'error' });
+      setTimeout(() => setSnackbar((prev) => ({ ...prev, visible: false })), 3000);
     } finally {
       setLoading(false);
     }

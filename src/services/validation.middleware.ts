@@ -5,6 +5,8 @@ export const estabelecimentoSchema = z.object({
   nome: z.string().min(1, 'Nome é obrigatório'),
   descricao: z.string().min(1, 'Descrição é obrigatória'),
   endereco: z.string().min(1, 'Endereço é obrigatório'),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
   taxaEntrega: z.number().positive('Taxa de entrega deve ser positiva'),
   tempoEntregaMin: z.number().int().positive('Tempo mínimo deve ser positivo'),
   tempoEntregaMax: z.number().int().positive('Tempo máximo deve ser positivo'),
@@ -15,6 +17,9 @@ export const estabelecimentoSchema = z.object({
   horaAbertura: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   horaFechamento: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   aberto: z.boolean().optional(),
+  // Configuração de frete grátis
+  freteGratisAtivado: z.boolean().optional(),
+  valorMinimoFreteGratis: z.union([z.number().positive(), z.null()]).optional(),
 });
 
 // Esquema para Produto

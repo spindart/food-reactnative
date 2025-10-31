@@ -106,7 +106,7 @@ export default function App() {
           <Stack.Screen name="EditarProduto" component={EditarProdutoScreen} options={{ title: 'Editar Produto' }} />
           <Stack.Screen name="GerenciarCategoriasProduto" component={GerenciarCategoriasProdutoScreen} options={{ title: 'Categorias de Produto' }} />
           <Stack.Screen name="PedidosDoEstabelecimento" component={PedidosDoEstabelecimentoScreen} options={{ title: 'Pedidos do Estabelecimento' }} />
-          <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ title: 'Meus Cartões' }} />
+          <Stack.Screen name="MeusCartoes" component={MeusCartoesScreen} options={{ headerShown: false }} />
           {/* Fluxo de Checkout */}
           <Stack.Screen name="EnderecoEntrega" component={require('./screens/EnderecoEntregaScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="FormaPagamento" component={require('./screens/FormaPagamentoScreen').default} options={{ headerShown: false }} />

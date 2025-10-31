@@ -69,6 +69,9 @@ model Estabelecimento {
   horaFechamento  String?
   // Flag manual de aberto/fechado controlada pelo dono
   aberto          Boolean    @default(false)
+  // Configuração de frete grátis
+  freteGratisAtivado      Boolean  @default(false)
+  valorMinimoFreteGratis  Float?
 }
 
 model Produto {
