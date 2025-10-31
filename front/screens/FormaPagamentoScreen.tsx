@@ -642,9 +642,17 @@ const FormaPagamentoScreen: React.FC = () => {
             ) : null}
             
             <TouchableOpacity 
-              className={`flex-1 mt-3 py-3 rounded-lg items-center justify-center ${
+              className={`w-full mt-3 py-3 rounded-lg items-center justify-center ${
                 savingCard ? 'bg-red-400' : 'bg-red-600'
               }`}
+              style={{
+                backgroundColor: savingCard ? '#f87171' : '#dc2626',
+                paddingVertical: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 48
+              }}
               onPress={async () => {
                 if (!cardNumber || !cardName || !cardExp || !cardCvv) {
                   setCardError('Preencha todos os campos');
@@ -704,11 +712,23 @@ const FormaPagamentoScreen: React.FC = () => {
               }}
               disabled={savingCard}
             >
-              {savingCard ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text className="text-white text-base font-bold">Confirmar Cartão</Text>
-              )}
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                {savingCard ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text 
+                    className="text-white text-base font-bold"
+                    style={{ 
+                      color: '#ffffff', 
+                      fontSize: 16, 
+                      fontWeight: 'bold',
+                      textAlign: 'center'
+                    }}
+                  >
+                    Confirmar Cartão
+                  </Text>
+                )}
+              </View>
             </TouchableOpacity>
             
             <TouchableOpacity 
