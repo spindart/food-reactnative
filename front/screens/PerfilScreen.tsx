@@ -188,72 +188,6 @@ const PerfilScreen: React.FC = () => {
           <Text className="text-lg font-bold text-gray-900 mb-4">
             Minha Conta
           </Text>
-          
-          {/* Meus Endereços */}
-          <TouchableOpacity
-            className="flex-row items-center py-4 border-b border-gray-100"
-            onPress={() => navigation.navigate('Enderecos')}
-            activeOpacity={0.7}
-          >
-            <View className="flex-row items-center flex-1">
-              <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-4">
-                <Ionicons name="location" size={20} color="#ea1d2c" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-900 mb-1">
-                  Meus Endereços
-                </Text>
-                <Text className="text-sm text-gray-500">
-                  Gerencie seus endereços de entrega
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          {/* Meus Cartões */}
-          <TouchableOpacity
-            className="flex-row items-center py-4 border-b border-gray-100"
-            onPress={() => (navigation as any).navigate('MeusCartoes')}
-            activeOpacity={0.7}
-          >
-            <View className="flex-row items-center flex-1">
-              <View className="w-10 h-10 rounded-full bg-yellow-50 items-center justify-center mr-4">
-                <Ionicons name="card" size={20} color="#eab308" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-900 mb-1">
-                  Meus Cartões
-                </Text>
-                <Text className="text-sm text-gray-500">
-                  Gerencie seus cartões salvos
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
-
-          {/* Meus Pedidos */}
-          <TouchableOpacity 
-            className="flex-row items-center py-4 border-b border-gray-100"
-            onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' })}
-            activeOpacity={0.7}
-          >
-            <View className="flex-row items-center flex-1">
-              <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center mr-4">
-                <Ionicons name="receipt" size={20} color="#f59e0b" />
-              </View>
-              <View className="flex-1">
-                <Text className="text-base font-semibold text-gray-900 mb-1">
-                  Meus Pedidos
-                </Text>
-                <Text className="text-sm text-gray-500">
-                  Histórico de pedidos
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-          </TouchableOpacity>
 
           {/* Minhas Conversas */}
           <TouchableOpacity 
@@ -267,7 +201,7 @@ const PerfilScreen: React.FC = () => {
               </View>
               <View className="flex-1">
                 <Text className="text-base font-semibold text-gray-900 mb-1">
-                  Minhas Conversas
+                  Conversas
                 </Text>
                 <Text className="text-sm text-gray-500">
                   Chat com estabelecimentos
@@ -314,6 +248,73 @@ const PerfilScreen: React.FC = () => {
             </View>
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
+
+          {/* Meus Pedidos */}
+          <TouchableOpacity 
+            className="flex-row items-center py-4 border-b border-gray-100"
+            onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' })}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center mr-4">
+                <Ionicons name="receipt" size={20} color="#f59e0b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Pedidos
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Histórico de pedidos
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
+          {/* Meus Endereços */}
+          <TouchableOpacity
+            className="flex-row items-center py-4 border-b border-gray-100"
+            onPress={() => navigation.navigate('Enderecos')}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-4">
+                <Ionicons name="location" size={20} color="#ea1d2c" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Endereços
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Gerencie seus endereços de entrega
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
+          {/* Meus Cartões */}
+          <TouchableOpacity
+            className="flex-row items-center py-4 border-b border-gray-100"
+            onPress={() => (navigation as any).navigate('MeusCartoes')}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-yellow-50 items-center justify-center mr-4">
+                <Ionicons name="card" size={20} color="#eab308" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Cartões
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Gerencie seus cartões salvos
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
         </View>
 
         {/* Botão de logout */}
