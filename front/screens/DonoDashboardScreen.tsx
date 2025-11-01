@@ -63,6 +63,12 @@ const DonoDashboardScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Painel do Dono</Text>
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: '#2196F3', marginBottom: 12 }]} 
+        onPress={() => navigation.navigate('ConversasEstabelecimento' as never)}
+      >
+        <Text style={styles.buttonText}>💬 Conversas</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('CadastrarEstabelecimento' as never)}>
         <Text style={styles.buttonText}>Cadastrar Novo Estabelecimento</Text>
       </TouchableOpacity>

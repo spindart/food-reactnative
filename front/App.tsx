@@ -19,6 +19,9 @@ import PedidosDoEstabelecimentoScreen from './screens/PedidosDoEstabelecimentoSc
 import GerenciarCategoriasProdutoScreen from './screens/GerenciarCategoriasProdutoScreen';
 import MeusCartoesScreen from './screens/MeusCartoesScreen';
 import PixPaymentConfirmationScreen from './screens/PixPaymentConfirmationScreen';
+import ChatScreen from './screens/ChatScreen';
+import ChatEstabelecimentoScreen from './screens/ChatEstabelecimentoScreen';
+import ConversasEstabelecimentoScreen from './screens/ConversasEstabelecimentoScreen';
 import * as Notifications from 'expo-notifications';
 import { CartProvider, useCart } from './context/CartContext';
 
@@ -112,6 +115,10 @@ export default function App() {
           <Stack.Screen name="FormaPagamento" component={require('./screens/FormaPagamentoScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="RevisarPedido" component={require('./screens/RevisarPedidoScreen').default} options={{ headerShown: false }} />
           <Stack.Screen name="PixPaymentConfirmation" component={PixPaymentConfirmationScreen} options={{ headerShown: false }} />
+          {/* Chat */}
+          <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ChatEstabelecimento" component={ChatEstabelecimentoScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ConversasEstabelecimento" component={ConversasEstabelecimentoScreen} options={{ title: 'Conversas' }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useRoute, useFocusEffect } from '@react-navigation/native';
+import { useRoute, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 import { getUsuarioById } from '../services/usuarioService';
 import { updateOrderStatus } from '../services/orderService';
@@ -44,6 +45,7 @@ interface ClienteInfo {
 
 const PedidosDoEstabelecimentoScreen: React.FC = () => {
   const route = useRoute<any>();
+  const navigation = useNavigation();
   const { estabelecimento } = route.params;
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [clientes, setClientes] = useState<{ [id: string]: ClienteInfo }>({});
@@ -454,6 +456,23 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
                   {cancelLoading === item.id ? '⏳ Cancelando...' : '❌ Cancelar Pedido'}
                 </Text>
               </TouchableOpacity>
+              
+              {/* Botão de Chat */}
+              {item.status !== 'pendente' && (
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: '#2196F3' }]}
+                  onPress={() => {
+                    navigation.navigate('ChatEstabelecimento' as never, {
+                      pedidoId: parseInt(item.id),
+                      clienteNome: clientes[item.clienteId]?.nome || 'Cliente',
+                      pedidoStatus: item.status,
+                    } as never);
+                  }}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
+                  <Text style={[styles.primaryButtonText, { marginLeft: 6 }]}>Chat</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}

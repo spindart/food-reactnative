@@ -38,6 +38,7 @@ model Usuario {
   pedidos          Pedido[]          @relation("ClientePedidos")
   addresses        Address[]
   cartoes          Cartao[]
+  mensagens        Mensagem[]        @relation("UsuarioMensagens")
   mercadoPagoCustomerId String?       @unique // ID do customer no MercadoPago
   createdAt        DateTime?         @default(now())
   updatedAt        DateTime?         @updatedAt
@@ -97,6 +98,7 @@ model Pedido {
   itens             ItemPedido[]
   cliente           Usuario         @relation("ClientePedidos", fields: [clienteId], references: [id])
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  conversa          Conversa?
   
   // Campos de pagamento
   paymentId         String?         @unique // ID do pagamento no MercadoPago
@@ -191,4 +193,34 @@ enum Status {
   preparo
   entregue
   cancelado
+}
+
+model Conversa {
+  id                Int        @id @default(autoincrement())
+  pedidoId          Int        @unique
+  pedido            Pedido     @relation(fields: [pedidoId], references: [id])
+  mensagens         Mensagem[]
+  ultimaMensagemAt  DateTime?  // Timestamp da última mensagem
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model Mensagem {
+  id                Int          @id @default(autoincrement())
+  conversaId        Int
+  conversa          Conversa     @relation(fields: [conversaId], references: [id])
+  remetenteId      Int          // ID do usuário que enviou (cliente ou dono do estabelecimento)
+  remetente        Usuario      @relation("UsuarioMensagens", fields: [remetenteId], references: [id])
+  texto            String?      // Texto da mensagem (null se for apenas foto)
+  imagemUrl        String?      // URL ou base64 da imagem
+  status           MensagemStatus @default(enviado)
+  isFromEstabelecimento Boolean @default(false) // true se remetente for dono do estabelecimento
+  createdAt        DateTime     @default(now())
+  lidaEm           DateTime?    // Timestamp quando foi lida
+}
+
+enum MensagemStatus {
+  enviado
+  recebido
+  lido
 }

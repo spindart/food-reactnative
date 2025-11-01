@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, FlatList, Text, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
 import { updateOrderStatus } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
@@ -27,6 +28,7 @@ type Pedido = {
 };
 
 const PedidoListScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -486,6 +488,25 @@ const PedidoListScreen: React.FC = () => {
                     <View className="bg-green-50 rounded-xl p-4 mt-4 items-center border border-green-200">
                       <Text className="text-base font-bold text-green-700 text-center">✅ Pedido entregue com sucesso!</Text>
                     </View>
+                  )}
+                  
+                  {/* Botão de Chat */}
+                  {selectedPedido.status !== 'pendente' && (
+                    <TouchableOpacity
+                      className="bg-red-600 rounded-xl p-4 mt-4 flex-row items-center justify-center"
+                      onPress={() => {
+                        setModalVisible(false);
+                        navigation.navigate('Chat' as never, {
+                          pedidoId: parseInt(selectedPedido.id),
+                          estabelecimentoNome: selectedPedido.estabelecimento?.nome || 'Restaurante',
+                          estabelecimentoImagem: selectedPedido.estabelecimento?.imagem,
+                          pedidoStatus: selectedPedido.status,
+                        } as never);
+                      }}
+                    >
+                      <Ionicons name="chatbubble-ellipses" size={20} color="#fff" />
+                      <Text className="text-white font-bold text-base ml-2">Abrir Chat</Text>
+                    </TouchableOpacity>
                   )}
                 </>
               )}
