@@ -97,10 +97,12 @@ model Pedido {
   estabelecimentoId Int
   status            Status
   createdAt         DateTime        @default(now())
+  entregueEm        DateTime?       // Timestamp quando o pedido foi marcado como entregue
   itens             ItemPedido[]
   cliente           Usuario         @relation("ClientePedidos", fields: [clienteId], references: [id])
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
   conversa          Conversa?
+  avaliacao         Avaliacao?      @relation("PedidoAvaliacao")
   
   // Campos de pagamento
   paymentId         String?         @unique // ID do pagamento no MercadoPago
@@ -139,13 +141,17 @@ model ItemPedido {
 
 model Avaliacao {
   id                Int             @id @default(autoincrement())
+  pedidoId          Int              @unique // Um pedido só pode ter uma avaliação
   estabelecimentoId Int
   usuarioId         Int
-  nota              Int
+  nota              Int              // Nota de 1 a 5 para o estabelecimento
+  notaEntregador    Int?             // Nota de 1 a 5 para o entregador (opcional)
   comentario        String?
-  createdAt         DateTime        @default(now())
+  motivos           String[]         // Array de motivos pré-definidos selecionados
+  createdAt         DateTime         @default(now())
+  pedido            Pedido           @relation("PedidoAvaliacao", fields: [pedidoId], references: [id])
   estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
-  usuario           Usuario         @relation(fields: [usuarioId], references: [id])
+  usuario           Usuario          @relation(fields: [usuarioId], references: [id])
 }
 
 model Categoria {
@@ -252,4 +258,5 @@ enum TipoNotificacao {
   PROMOCAO_CUPOM
   AVISO_IMPORTANTE
   EVENTO_SISTEMA
+  AVALIAR_PEDIDO
 }

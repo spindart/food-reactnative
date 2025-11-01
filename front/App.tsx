@@ -191,6 +191,8 @@ export default function App() {
           <Stack.Screen name="ConversasEstabelecimento" component={ConversasEstabelecimentoScreen} options={{ title: 'Conversas' }} />
           {/* Notificações */}
           <Stack.Screen name="Notificacoes" component={NotificacoesScreen} options={{ headerShown: false }} />
+          {/* Avaliações */}
+          <Stack.Screen name="MinhasAvaliacoes" component={require('./screens/MinhasAvaliacoesScreen').default} options={{ headerShown: false }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

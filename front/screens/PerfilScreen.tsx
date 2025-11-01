@@ -315,6 +315,28 @@ const PerfilScreen: React.FC = () => {
             <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
           </TouchableOpacity>
 
+          {/* Minhas Avaliações */}
+          <TouchableOpacity
+            className="flex-row items-center py-4 border-b border-gray-100"
+            onPress={() => (navigation as any).navigate('MinhasAvaliacoes')}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-amber-50 items-center justify-center mr-4">
+                <Ionicons name="star" size={20} color="#f59e0b" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Minhas Avaliações
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Veja todas as suas avaliações
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
         </View>
 
         {/* Botão de logout */}

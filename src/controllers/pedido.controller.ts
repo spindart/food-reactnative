@@ -414,9 +414,15 @@ export class PedidoController {
           res.status(400).json({ error: 'Status inválido' });
           return;
       }
+      // Se o status for "entregue", salvar o timestamp
+      const updateData: any = { status: novoStatus };
+      if (novoStatus === 'entregue') {
+        updateData.entregueEm = new Date();
+      }
+
       const pedidoAtualizado = await prisma.pedido.update({
         where: { id: Number(id) },
-        data: { status: novoStatus },
+        data: updateData,
         include: {
           estabelecimento: {
             select: {

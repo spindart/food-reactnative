@@ -157,6 +157,23 @@ export class NotificationDBService {
   }
 
   /**
+   * Notificação para avaliar pedido após 30 minutos da entrega
+   */
+  static async notificarAvaliarPedido(
+    usuarioId: number,
+    pedidoId: number,
+    estabelecimentoNome: string
+  ) {
+    return this.criarNotificacao({
+      usuarioId,
+      tipo: 'AVALIAR_PEDIDO',
+      titulo: 'Avalie seu pedido! ⭐',
+      mensagem: `Como foi sua experiência com ${estabelecimentoNome}? Sua opinião é muito importante!`,
+      pedidoId,
+    });
+  }
+
+  /**
    * Lista notificações de um usuário
    */
   static async listarNotificacoes(usuarioId: number, apenasNaoLidas?: boolean) {

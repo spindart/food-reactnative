@@ -5,8 +5,10 @@ import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
 import { updateOrderStatus } from '../services/orderService';
 import { getCurrentUser } from '../services/currentUserService';
-import EvaluationForm from '../components/EvaluationForm';
 import { useFocusEffect } from '@react-navigation/native';
+import AvaliacaoModal from './AvaliacaoModal';
+import { avaliacaoService } from '../services/avaliacaoService';
+import { Alert } from 'react-native';
 
 type Pedido = {
   id: string;
@@ -35,6 +37,8 @@ const PedidoListScreen: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [pedidoAvaliado, setPedidoAvaliado] = useState<boolean>(false);
+  const [avaliacaoModalVisible, setAvaliacaoModalVisible] = useState(false);
+  const [pedidoParaAvaliar, setPedidoParaAvaliar] = useState<Pedido | null>(null);
 
   const fetchPedidos = async () => {
     try {
@@ -96,8 +100,42 @@ const PedidoListScreen: React.FC = () => {
     React.useCallback(() => {
       setLoading(true);
       fetchPedidos();
+      
+      // Verificar se há pedidos para avaliar
+      verificarPedidosParaAvaliar();
     }, [])
   );
+
+  const verificarPedidosParaAvaliar = async () => {
+    try {
+      const pedidosParaAvaliar = await avaliacaoService.listarParaAvaliar();
+      if (pedidosParaAvaliar.pedidos && pedidosParaAvaliar.pedidos.length > 0) {
+        // Encontrar o pedido na lista local
+        const pedidoEncontrado = pedidosParaAvaliar.pedidos[0];
+        
+        // Verificar se pode avaliar antes de mostrar o modal
+        try {
+          const podeAvaliar = await avaliacaoService.podeAvaliar(pedidoEncontrado.id);
+          
+          if (podeAvaliar.canAvaliar && podeAvaliar.isWithinWindow) {
+            const pedidoCompleto = await api.get(`/pedidos/${pedidoEncontrado.id}`);
+            
+            if (pedidoCompleto.data) {
+              setPedidoParaAvaliar(pedidoCompleto.data);
+              // Mostrar modal após 2 segundos (para não ser muito invasivo)
+              setTimeout(() => {
+                setAvaliacaoModalVisible(true);
+              }, 2000);
+            }
+          }
+        } catch (error) {
+          console.log('Erro ao verificar se pode avaliar:', error);
+        }
+      }
+    } catch (error) {
+      console.log('Nenhum pedido para avaliar no momento');
+    }
+  };
 
   const handleUpdateStatus = async (pedidoId: string) => {
     try {
@@ -195,14 +233,10 @@ const PedidoListScreen: React.FC = () => {
               onPress={async () => {
                 setSelectedPedido(item);
                 setModalVisible(true);
+                // Verificar se o pedido já foi avaliado
                 try {
-                  const res = await api.get(`/avaliacoes/avaliar`, {
-                    params: {
-                      estabelecimentoId: item.estabelecimentoId,
-                      usuarioId: item.clienteId,
-                    },
-                  });
-                  setPedidoAvaliado(res.data && res.data.avaliado === true);
+                  const avaliacaoExistente = await avaliacaoService.buscarPorPedido(parseInt(item.id));
+                  setPedidoAvaliado(!!avaliacaoExistente);
                 } catch {
                   setPedidoAvaliado(false);
                 }
@@ -457,20 +491,35 @@ const PedidoListScreen: React.FC = () => {
                           <Text className="text-green-800 font-bold text-base">✅ Você já avaliou este pedido.</Text>
                         </View>
                       ) : (
-                        <EvaluationForm onSubmit={async (nota, comentario) => {
-                          if (!selectedPedido) return;
-                          try {
-                            await api.post('/avaliacoes/avaliar', {
-                              pedidoId: selectedPedido.id,
-                              nota,
-                              comentario,
-                            });
-                            alert('Avaliação enviada com sucesso!');
-                            setPedidoAvaliado(true);
-                          } catch (err) {
-                            alert('Erro ao enviar avaliação.');
-                          }
-                        }} />
+                        <TouchableOpacity
+                          className="bg-orange-500 rounded-xl p-4 items-center"
+                          onPress={async () => {
+                            try {
+                              // Verificar se pode avaliar antes de mostrar o modal
+                              const podeAvaliar = await avaliacaoService.podeAvaliar(parseInt(selectedPedido.id));
+                              
+                              if (!podeAvaliar.canAvaliar) {
+                                Alert.alert('Atenção', podeAvaliar.reason || 'Não é possível avaliar este pedido');
+                                return;
+                              }
+                              
+                              if (!podeAvaliar.isWithinWindow) {
+                                Alert.alert('Prazo expirado', 'O prazo para avaliar este pedido expirou (30 minutos após a entrega)');
+                                return;
+                              }
+                              
+                              setModalVisible(false);
+                              setPedidoParaAvaliar(selectedPedido);
+                              setAvaliacaoModalVisible(true);
+                            } catch (error: any) {
+                              console.error('Erro ao verificar se pode avaliar:', error);
+                              Alert.alert('Erro', 'Erro ao verificar se pode avaliar. Tente novamente.');
+                            }
+                          }}
+                        >
+                          <Ionicons name="star" size={24} color="#fff" />
+                          <Text className="text-white font-bold text-base mt-2">Avaliar Pedido</Text>
+                        </TouchableOpacity>
                       )}
                     </View>
                   )}
@@ -517,6 +566,24 @@ const PedidoListScreen: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Avaliação */}
+      {pedidoParaAvaliar && (
+        <AvaliacaoModal
+          visible={avaliacaoModalVisible}
+          pedidoId={parseInt(pedidoParaAvaliar.id)}
+          estabelecimentoNome={pedidoParaAvaliar.estabelecimento?.nome || 'Restaurante'}
+          estabelecimentoImagem={pedidoParaAvaliar.estabelecimento?.imagem}
+          onClose={() => {
+            setAvaliacaoModalVisible(false);
+            setPedidoParaAvaliar(null);
+          }}
+          onSuccess={() => {
+            setPedidoAvaliado(true);
+            fetchPedidos(); // Recarregar pedidos para atualizar status
+          }}
+        />
+      )}
     </View>
   );
 };

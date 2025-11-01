@@ -249,29 +249,59 @@ export class EstabelecimentoController {
   static async avaliar(req: Request, res: Response): Promise<void> {
     try {
       console.log('Middleware user:', req.user); // Log the user object from middleware
-      const { estabelecimentoId, nota, comentario } = req.body;
+      const { estabelecimentoId, pedidoId, nota, comentario } = req.body;
       const usuarioId = (req as any).user?.id; // Use authenticated user's ID
 
-      console.log('Received data:', { estabelecimentoId, nota, comentario, usuarioId });
+      console.log('Received data:', { estabelecimentoId, pedidoId, nota, comentario, usuarioId });
 
-      if (!estabelecimentoId || nota === undefined || nota === null) {
-        res.status(400).json({ error: 'Campos obrigatórios: estabelecimentoId, nota' });
+      if (!estabelecimentoId || !pedidoId || nota === undefined || nota === null) {
+        res.status(400).json({ error: 'Campos obrigatórios: estabelecimentoId, pedidoId, nota' });
         return;
       }
 
-      if (nota < 0 || nota > 5) {
-        res.status(400).json({ error: 'A nota deve estar entre 0 e 5.' });
+      if (nota < 1 || nota > 5) {
+        res.status(400).json({ error: 'A nota deve estar entre 1 e 5.' });
         return;
       }
 
       // Ensure IDs are integers
       const estabelecimentoIdInt = parseInt(estabelecimentoId, 10);
+      const pedidoIdInt = parseInt(pedidoId, 10);
       const usuarioIdInt = parseInt(usuarioId, 10);
 
-      console.log('Parsed IDs:', { estabelecimentoIdInt, usuarioIdInt });
+      console.log('Parsed IDs:', { estabelecimentoIdInt, pedidoIdInt, usuarioIdInt });
 
-      if (isNaN(estabelecimentoIdInt) || isNaN(usuarioIdInt)) {
+      if (isNaN(estabelecimentoIdInt) || isNaN(pedidoIdInt) || isNaN(usuarioIdInt)) {
         res.status(400).json({ error: 'IDs inválidos.' });
+        return;
+      }
+
+      // Validate existence of pedido
+      const pedido = await prisma.pedido.findUnique({
+        where: { id: pedidoIdInt },
+        include: { avaliacao: true },
+      });
+      
+      if (!pedido) {
+        res.status(404).json({ error: 'Pedido não encontrado' });
+        return;
+      }
+
+      // Verificar se pedido já foi avaliado
+      if (pedido.avaliacao) {
+        res.status(400).json({ error: 'Este pedido já foi avaliado' });
+        return;
+      }
+
+      // Verificar se pedido pertence ao usuário
+      if (pedido.clienteId !== usuarioIdInt) {
+        res.status(403).json({ error: 'Pedido não pertence a este usuário' });
+        return;
+      }
+
+      // Verificar se pedido está entregue
+      if (pedido.status !== 'entregue') {
+        res.status(400).json({ error: 'Apenas pedidos entregues podem ser avaliados' });
         return;
       }
 
@@ -284,33 +314,27 @@ export class EstabelecimentoController {
         return;
       }
 
-      // Validate existence of usuarioId
-      const usuario = await prisma.usuario.findUnique({
-        where: { id: usuarioIdInt },
-      });
-      if (!usuario) {
-        res.status(404).json({ error: 'Usuário não encontrado' });
+      // Verificar se estabelecimentoId do pedido corresponde
+      if (pedido.estabelecimentoId !== estabelecimentoIdInt) {
+        res.status(400).json({ error: 'Estabelecimento não corresponde ao pedido' });
         return;
       }
 
       // Cria avaliação
       const avaliacao = await prisma.avaliacao.create({
-        data: { estabelecimentoId: estabelecimentoIdInt, usuarioId: usuarioIdInt, nota, comentario },
-      });
-
-      // Atualiza média e count
-      const stats = await prisma.avaliacao.aggregate({
-        where: { estabelecimentoId: estabelecimentoIdInt },
-        _avg: { nota: true },
-        _count: { id: true },
-      });
-      await prisma.estabelecimento.update({
-        where: { id: estabelecimentoIdInt },
-        data: {
-          avaliacao: stats._avg.nota || 0,
-          avaliacoesCount: stats._count.id,
+        data: { 
+          pedidoId: pedidoIdInt,
+          estabelecimentoId: estabelecimentoIdInt, 
+          usuarioId: usuarioIdInt, 
+          nota, 
+          comentario,
+          motivos: [],
         },
       });
+
+      // Atualiza média e count usando o serviço de avaliação
+      const { AvaliacaoService } = require('../services/avaliacao.service');
+      await AvaliacaoService.atualizarRatingEstabelecimento(estabelecimentoIdInt);
 
       res.status(201).json(avaliacao);
     } catch (error) {

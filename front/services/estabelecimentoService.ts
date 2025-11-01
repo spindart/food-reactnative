@@ -23,6 +23,9 @@ export type Estabelecimento = {
   // Configuração de frete grátis
   freteGratisAtivado?: boolean;
   valorMinimoFreteGratis?: number;
+  // Avaliação do estabelecimento
+  avaliacao?: number; // Nota média (0 a 5)
+  avaliacoesCount?: number; // Quantidade de avaliações
 };
 
 export const getAllEstabelecimentos = async () => {

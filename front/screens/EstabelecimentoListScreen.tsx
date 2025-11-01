@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, FlatList, Text, ActivityIndicator, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getAllEstabelecimentos, getAvaliacoes, avaliarEstabelecimento } from '../services/estabelecimentoService';
+import { getAllEstabelecimentos } from '../services/estabelecimentoService';
 import { getCategorias, Categoria } from '../services/categoriaService';
 import { getAllProdutos, Produto } from '../services/produtoService';
 import { RootStackParamList } from '../types';
@@ -19,9 +19,6 @@ const EstabelecimentoListScreen: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoria, setCategoria] = useState<string>('');
-  const [avaliacoes, setAvaliacoes] = useState<Record<string, any>>({});
-  const [nota, setNota] = useState<number>(0);
-  const [comentario, setComentario] = useState<string>('');
   const [produtos, setProdutos] = useState<Produto[]>([]);
 
   useEffect(() => {
@@ -38,29 +35,6 @@ const EstabelecimentoListScreen: React.FC = () => {
     fetchEstabelecimentos();
   }, []);
 
-  const fetchAvaliacoes = async (estabelecimentoId: string) => {
-    try {
-      const data = await getAvaliacoes(estabelecimentoId);
-      setAvaliacoes((prev) => ({ ...prev, [estabelecimentoId]: data }));
-    } catch (err) {
-      console.error('Erro ao carregar avaliações:', err);
-    }
-  };
-
-  const handleAvaliar = async (estabelecimentoId: string, nota: number, comentario: string) => {
-    try {
-      await avaliarEstabelecimento(estabelecimentoId, { nota, comentario });
-      setNota(0);
-      setComentario('');
-      fetchAvaliacoes(estabelecimentoId);
-    } catch (err) {
-      console.error('Erro ao enviar avaliação:', err);
-    }
-  };
-
-  useEffect(() => {
-    estabelecimentos.forEach((e) => fetchAvaliacoes(e.id));
-  }, [estabelecimentos]);
 
   const handleViewProducts = (estabelecimento: any) => {
     navigation.navigate('ProdutosDoEstabelecimento', { estabelecimento });
@@ -178,16 +152,23 @@ const EstabelecimentoListScreen: React.FC = () => {
         }
         data={filtered}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View className="px-4">
-            <RestaurantCard
-              restaurant={item}
-              rating={avaliacoes[item.id]}
-              onPress={() => handleViewProducts(item)}
-              variant="vertical"
-            />
-          </View>
-        )}
+        renderItem={({ item }) => {
+          // Usar avaliacao e avaliacoesCount do estabelecimento
+          const rating = item.avaliacao !== undefined && item.avaliacao > 0
+            ? { media: item.avaliacao, count: item.avaliacoesCount || 0 }
+            : undefined;
+          
+          return (
+            <View className="px-4">
+              <RestaurantCard
+                restaurant={item}
+                rating={rating}
+                onPress={() => handleViewProducts(item)}
+                variant="vertical"
+              />
+            </View>
+          );
+        }}
         contentContainerStyle={{ paddingBottom: 16 }}
         showsVerticalScrollIndicator={false}
       />

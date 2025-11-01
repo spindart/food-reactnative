@@ -7,6 +7,7 @@ import { listProdutoCategorias } from '../services/produtoCategoriaService';
 import { getCurrentUser } from '../services/currentUserService';
 import { useCart } from '../context/CartContext';
 import { Alert } from 'react-native';
+import { avaliacaoService } from '../services/avaliacaoService';
 
 
 
@@ -23,6 +24,10 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalProduto, setModalProduto] = useState<any | null>(null);
   const [modalEstabelecimentoVisible, setModalEstabelecimentoVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState<'informacoes' | 'avaliacoes'>('informacoes');
+  const [avaliacoes, setAvaliacoes] = useState<any[]>([]);
+  const [loadingAvaliacoes, setLoadingAvaliacoes] = useState(false);
+  const [errorAvaliacoes, setErrorAvaliacoes] = useState<string | null>(null);
   const [quantidade, setQuantidade] = useState(1);
   const [observacao, setObservacao] = useState('');
   const { state: cartState } = useCart();
@@ -57,6 +62,62 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
     });
     return unsubscribe;
   }, [estabelecimento.id, navigation, selectedCategoria]);
+
+  // Carregar avaliações quando a aba mudar para 'avaliacoes'
+  useEffect(() => {
+    if (activeTab === 'avaliacoes' && modalEstabelecimentoVisible) {
+      loadAvaliacoes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, modalEstabelecimentoVisible]);
+
+  const loadAvaliacoes = async () => {
+    try {
+      setLoadingAvaliacoes(true);
+      setErrorAvaliacoes(null);
+      
+      // Garantir que o ID seja um número
+      const estabelecimentoId = typeof estabelecimento.id === 'string' 
+        ? parseInt(estabelecimento.id) 
+        : estabelecimento.id;
+      
+      console.log('🔍 Carregando avaliações para estabelecimento:', estabelecimentoId);
+      
+      if (isNaN(estabelecimentoId)) {
+        throw new Error('ID do estabelecimento inválido');
+      }
+      
+      const response = await avaliacaoService.listarPorEstabelecimento(
+        estabelecimentoId,
+        20,
+        0
+      );
+      
+      console.log('📦 Resposta completa da API:', JSON.stringify(response, null, 2));
+      
+      // O backend retorna { avaliacoes, total, limit, offset }
+      if (response && response.avaliacoes) {
+        const avaliacoesArray = Array.isArray(response.avaliacoes) ? response.avaliacoes : [];
+        console.log('✅ Avaliações processadas:', avaliacoesArray.length, avaliacoesArray);
+        setAvaliacoes(avaliacoesArray);
+      } else {
+        console.log('⚠️ Resposta sem avaliações ou formato incorreto');
+        setAvaliacoes([]);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao carregar avaliações:', error);
+      console.error('❌ Detalhes do erro:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        message: error.message
+      });
+      const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message || 'Erro ao carregar avaliações';
+      setErrorAvaliacoes(errorMessage);
+      setAvaliacoes([]);
+    } finally {
+      setLoadingAvaliacoes(false);
+    }
+  };
 
   // Agrupa produtos por categoria
   const sections = React.useMemo(() => {
@@ -487,17 +548,66 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
             onPress={() => setModalEstabelecimentoVisible(false)}
           />
           <View className="bg-white rounded-t-3xl max-h-[85%]">
+            {/* Header do modal */}
+            <View className="flex-row items-center justify-between px-6 pt-6 pb-4 border-b border-gray-200">
+              <Text className="text-2xl font-bold text-gray-800">Informações do Estabelecimento</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setModalEstabelecimentoVisible(false);
+                  setActiveTab('informacoes');
+                }}
+                className="bg-gray-100 rounded-full p-2"
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tabs */}
+            <View className="flex-row border-b border-gray-200">
+              <TouchableOpacity
+                onPress={() => setActiveTab('informacoes')}
+                className={`flex-1 py-4 items-center ${
+                  activeTab === 'informacoes' ? 'border-b-2 border-red-600' : ''
+                }`}
+              >
+                <Text className={`font-semibold ${
+                  activeTab === 'informacoes' ? 'text-red-600' : 'text-gray-500'
+                }`}>
+                  Informações
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setActiveTab('avaliacoes');
+                  // Sempre carregar quando mudar para a aba de avaliações
+                  if (!loadingAvaliacoes) {
+                    loadAvaliacoes();
+                  }
+                }}
+                className={`flex-1 py-4 items-center ${
+                  activeTab === 'avaliacoes' ? 'border-b-2 border-red-600' : ''
+                }`}
+              >
+                <View className="flex-row items-center">
+                  <Text className={`font-semibold ${
+                    activeTab === 'avaliacoes' ? 'text-red-600' : 'text-gray-500'
+                  }`}>
+                    Avaliações
+                  </Text>
+                  {estabelecimento.avaliacoesCount > 0 && (
+                    <Text className={`text-xs ml-1 ${
+                      activeTab === 'avaliacoes' ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                      ({estabelecimento.avaliacoesCount || 0})
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </View>
+
             <ScrollView className="px-6 py-6" showsVerticalScrollIndicator={false}>
-              {/* Header do modal */}
-              <View className="flex-row items-center justify-between mb-6">
-                <Text className="text-2xl font-bold text-gray-800">Informações do Estabelecimento</Text>
-                <TouchableOpacity 
-                  onPress={() => setModalEstabelecimentoVisible(false)}
-                  className="bg-gray-100 rounded-full p-2"
-                >
-                  <Ionicons name="close" size={24} color="#666" />
-                </TouchableOpacity>
-              </View>
+              {activeTab === 'informacoes' ? (
+                <>
 
               {/* Nome */}
               <View className="mb-4">
@@ -624,6 +734,126 @@ const ProdutosDoEstabelecimentoScreen: React.FC = () => {
                   </View>
                 </View>
               </View>
+                </>
+              ) : (
+                <View>
+                  {/* Header de Avaliações */}
+                  <View className="mb-6">
+                    {estabelecimento.avaliacao !== undefined && estabelecimento.avaliacao > 0 ? (
+                      <View className="items-center mb-4">
+                        <View className="flex-row items-center mb-2">
+                          <Ionicons name="star" size={32} color="#fbbf24" />
+                          <Text className="text-4xl font-bold text-gray-800 ml-2">
+                            {estabelecimento.avaliacao.toFixed(1)}
+                          </Text>
+                        </View>
+                        <Text className="text-sm text-gray-600">
+                          {estabelecimento.avaliacoesCount || 0} {estabelecimento.avaliacoesCount === 1 ? 'avaliação' : 'avaliações'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View className="items-center mb-4">
+                        <Ionicons name="star-outline" size={48} color="#D1D5DB" />
+                        <Text className="text-base text-gray-500 mt-2">Nenhuma avaliação ainda</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Lista de Avaliações */}
+                  {errorAvaliacoes ? (
+                    <View className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4">
+                      <View className="flex-row items-center justify-between">
+                        <View className="flex-1">
+                          <Text className="text-red-800 font-semibold mb-1">
+                            Erro ao carregar avaliações
+                          </Text>
+                          <Text className="text-red-600 text-sm">
+                            {errorAvaliacoes}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setErrorAvaliacoes(null);
+                            loadAvaliacoes();
+                          }}
+                          className="ml-2"
+                        >
+                          <Ionicons name="refresh" size={20} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : loadingAvaliacoes ? (
+                    <View className="py-8">
+                      <ActivityIndicator size="large" color="#ea1d2c" />
+                    </View>
+                  ) : avaliacoes.length > 0 ? (
+                    <>
+                      {console.log('🎨 Renderizando', avaliacoes.length, 'avaliações')}
+                      {avaliacoes.map((item) => {
+                        console.log('📝 Item de avaliação:', item);
+                        return (
+                        <View key={item.id?.toString() || Math.random().toString()} className="bg-gray-50 rounded-xl p-4 mb-4">
+                          <View className="flex-row items-center justify-between mb-2">
+                            <Text className="font-bold text-base text-gray-800">
+                              {item.usuario?.nome || 'Usuário Anônimo'}
+                            </Text>
+                            <View className="flex-row items-center">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <Ionicons
+                                  key={star}
+                                  name={star <= item.nota ? 'star' : 'star-outline'}
+                                  size={16}
+                                  color={star <= item.nota ? '#fbbf24' : '#D1D5DB'}
+                                />
+                              ))}
+                            </View>
+                          </View>
+                          {item.motivos && Array.isArray(item.motivos) && item.motivos.length > 0 && (
+                            <View className="flex-row flex-wrap mb-2">
+                              {item.motivos.map((motivo: string, idx: number) => (
+                                <View
+                                  key={idx}
+                                  className="bg-orange-100 px-2 py-1 rounded-full mr-2 mb-2"
+                                >
+                                  <Text className="text-xs text-orange-700 font-medium">
+                                    {motivo}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                          {item.comentario && (
+                            <Text className="text-sm text-gray-600 mb-2">{item.comentario}</Text>
+                          )}
+                          <Text className="text-xs text-gray-400">
+                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric',
+                            }) : ''}
+                          </Text>
+                        </View>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      {console.log('⚠️ Nenhuma avaliação para renderizar. Estado:', {
+                        avaliacoesLength: avaliacoes.length,
+                        loading: loadingAvaliacoes,
+                        error: errorAvaliacoes
+                      })}
+                      <View className="items-center py-8">
+                        <Ionicons name="star-outline" size={48} color="#D1D5DB" />
+                        <Text className="text-base text-gray-500 mt-4">Nenhuma avaliação ainda</Text>
+                        <Text className="text-sm text-gray-400 mt-2">
+                          Seja o primeiro a avaliar este estabelecimento!
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>

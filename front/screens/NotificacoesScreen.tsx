@@ -83,6 +83,8 @@ const NotificacoesScreen: React.FC = () => {
         return { name: 'warning-outline' as const, color: '#f44336' };
       case 'EVENTO_SISTEMA':
         return { name: 'checkmark-circle-outline' as const, color: '#4caf50' };
+      case 'AVALIAR_PEDIDO':
+        return { name: 'star' as const, color: '#FFD700' };
       default:
         return { name: 'notifications-outline' as const, color: '#666' };
     }
@@ -117,6 +119,12 @@ const NotificacoesScreen: React.FC = () => {
           estabelecimentoImagem: notificacao.pedido?.estabelecimento?.imagem,
           pedidoStatus: notificacao.pedido?.status || 'pendente',
         } as never);
+      } else if (notificacao.tipo === 'AVALIAR_PEDIDO') {
+        // Abrir tela de pedidos e mostrar modal de avaliação
+        (navigation as any).navigate('HomeTabs', { 
+          screen: 'Pedidos',
+          params: { avaliarPedidoId: notificacao.pedidoId }
+        });
       } else {
         // Abrir tela de pedidos
         (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' });
