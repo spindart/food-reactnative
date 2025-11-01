@@ -71,4 +71,22 @@ export class NotificationService {
       }
     }
   }
+
+  static notifyNewNotification(notificacao: any) {
+    const timestamp = new Date().toISOString();
+    const message = {
+      type: 'notification',
+      notificacao,
+      timestamp,
+    };
+    // Notificação por WebSocket
+    if (wss) {
+      for (const ws of clients) {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify(message));
+        }
+      }
+    }
+    console.log(`[${timestamp}] Nova notificação criada para usuário ${notificacao.usuarioId}.`);
+  }
 }

@@ -115,6 +115,7 @@ const PedidoListScreen: React.FC = () => {
   const statusMap: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
     pendente: { label: 'Pendente', color: '#ea1d2c', icon: 'time-outline' },
     preparo: { label: 'Em preparo', color: '#f7b731', icon: 'restaurant-outline' },
+    em_entrega: { label: 'Saiu para entrega', color: '#2196f3', icon: 'car-outline' },
     entregue: { label: 'Entregue', color: '#2ecc71', icon: 'checkmark-circle-outline' },
     cancelado: { label: 'Cancelado', color: '#e74c3c', icon: 'close-circle-outline' },
   };
@@ -178,7 +179,7 @@ const PedidoListScreen: React.FC = () => {
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
           const statusInfo = statusMap[item.status] || { label: item.status, color: '#888', icon: 'help-circle-outline' };
-          const isPedidoAtual = item.status === 'pendente' || item.status === 'preparo';
+          const isPedidoAtual = item.status === 'pendente' || item.status === 'preparo' || item.status === 'em_entrega';
           
           let totalPedido = item.total;
           if (!totalPedido && item.itens) {
@@ -474,12 +475,14 @@ const PedidoListScreen: React.FC = () => {
                     </View>
                   )}
                   
-                  {(selectedPedido.status === 'pendente' || selectedPedido.status === 'preparo') && (
+                  {(selectedPedido.status === 'pendente' || selectedPedido.status === 'preparo' || selectedPedido.status === 'em_entrega') && (
                     <View className="bg-blue-50 rounded-xl p-4 mt-4 items-center border border-blue-200">
                       <Text className="text-base font-bold text-blue-700 text-center">
                         {selectedPedido.status === 'pendente' 
                           ? '⏳ Aguardando confirmação do estabelecimento!' 
-                          : '🍳 Seu pedido está sendo preparado!'}
+                          : selectedPedido.status === 'preparo'
+                          ? '🍳 Seu pedido está sendo preparado!'
+                          : '🚗💨 Seu pedido saiu para entrega!'}
                       </Text>
                     </View>
                   )}

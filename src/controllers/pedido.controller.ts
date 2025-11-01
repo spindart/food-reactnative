@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { z } from 'zod';
 import { NotificationService } from '../services/notification.service';
+import { NotificationDBService } from '../services/notification-db.service';
 import { MercadoPagoService } from '../services/mercadopago.service';
 
 const prisma = new PrismaClient();
@@ -154,6 +155,19 @@ export class PedidoController {
       
       // Calcular total com base nos itens criados
       const totalFinal = pedido.itens.reduce((sum, item) => sum + (item.precoUnitario * item.quantidade), 0) + taxaEntrega;
+      
+      // Criar notificação de pedido confirmado
+      try {
+        await NotificationDBService.notificarStatusPedido(
+          pedido.clienteId,
+          pedido.id,
+          'pendente',
+          pedido.estabelecimento.nome
+        );
+      } catch (notifError) {
+        console.error('Erro ao criar notificação de pedido confirmado:', notifError);
+        // Não falha a criação do pedido se a notificação falhar
+      }
       
       res.status(201).json({ 
         success: true, 
@@ -381,12 +395,15 @@ export class PedidoController {
         res.status(404).json({ error: 'Pedido não encontrado' });
         return;
       }
-      let novoStatus: 'pendente' | 'preparo' | 'entregue' | 'cancelado';
+      let novoStatus: 'pendente' | 'preparo' | 'em_entrega' | 'entregue' | 'cancelado';
       switch (pedido.status) {
         case 'pendente':
           novoStatus = 'preparo';
           break;
         case 'preparo':
+          novoStatus = 'em_entrega';
+          break;
+        case 'em_entrega':
           novoStatus = 'entregue';
           break;
         case 'entregue':
@@ -400,8 +417,31 @@ export class PedidoController {
       const pedidoAtualizado = await prisma.pedido.update({
         where: { id: Number(id) },
         data: { status: novoStatus },
+        include: {
+          estabelecimento: {
+            select: {
+              nome: true,
+            },
+          },
+        },
       });
+      
+      // Notificação via WebSocket
       NotificationService.notifyPedidoStatusChange(pedido.id, pedido.status, novoStatus);
+      
+      // Criar notificação no banco de dados
+      try {
+        await NotificationDBService.notificarStatusPedido(
+          pedido.clienteId,
+          pedido.id,
+          novoStatus,
+          pedidoAtualizado.estabelecimento.nome
+        );
+      } catch (notifError) {
+        console.error('Erro ao criar notificação:', notifError);
+        // Não falha a atualização do pedido se a notificação falhar
+      }
+      
       res.json(pedidoAtualizado);
     } catch (error) {
       res.status(400).json({ error: 'Erro ao atualizar status do pedido', details: error });

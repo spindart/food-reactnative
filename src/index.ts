@@ -16,6 +16,7 @@ import avaliacaoRoutes from './routes/avaliacao.routes';
 import cartaoRoutes from './routes/cartao.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
 import chatRoutes from './routes/chat.routes';
+import notificacaoRoutes from './routes/notificacao.routes';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use('/api/produto-categorias', produtoCategoriaRoutes);
 app.use('/api/cartoes', cartaoRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/notificacoes', notificacaoRoutes);
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');

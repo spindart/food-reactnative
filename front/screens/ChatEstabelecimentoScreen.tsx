@@ -148,6 +148,8 @@ const ChatEstabelecimentoScreen: React.FC = () => {
     switch (status) {
       case 'preparo':
         return '#ff9800';
+      case 'em_entrega':
+        return '#2196f3';
       case 'entregue':
         return '#4caf50';
       case 'cancelado':
@@ -163,6 +165,8 @@ const ChatEstabelecimentoScreen: React.FC = () => {
         return 'Pendente';
       case 'preparo':
         return 'Em preparo';
+      case 'em_entrega':
+        return 'Saiu para entrega';
       case 'entregue':
         return 'Entregue';
       case 'cancelado':

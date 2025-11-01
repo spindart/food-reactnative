@@ -2,21 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { getCurrentUser } from '../services/currentUserService';
+import { NotificacaoService } from '../services/notificacaoService';
 
 const PerfilScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [user, setUser] = useState<any>(null);
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notificacoesNaoLidas, setNotificacoesNaoLidas] = useState(0);
 
   useEffect(() => {
     loadUserData();
+    loadNotificacoes();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadNotificacoes();
+    }, [])
+  );
+
+  const loadNotificacoes = async () => {
+    try {
+      const count = await NotificacaoService.contarNaoLidas();
+      setNotificacoesNaoLidas(count);
+    } catch (error) {
+      console.error('Erro ao carregar contagem de notificações:', error);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -156,12 +174,12 @@ const PerfilScreen: React.FC = () => {
           
           {/* Email em destaque */}
           <Text className="text-lg font-bold text-gray-900 mb-1">
-            {user?.email || 'usuario@email.com'}
+          {user?.nome || 'Usuário'}
           </Text>
           
           {/* Nome do usuário */}
           <Text className="text-base text-gray-500">
-            {user?.nome || 'Usuário'}
+          {user?.email || 'usuario@email.com'}
           </Text>
         </View>
 
@@ -217,7 +235,7 @@ const PerfilScreen: React.FC = () => {
 
           {/* Meus Pedidos */}
           <TouchableOpacity 
-            className="flex-row items-center py-4"
+            className="flex-row items-center py-4 border-b border-gray-100"
             onPress={() => (navigation as any).navigate('HomeTabs', { screen: 'Pedidos' })}
             activeOpacity={0.7}
           >
@@ -231,6 +249,66 @@ const PerfilScreen: React.FC = () => {
                 </Text>
                 <Text className="text-sm text-gray-500">
                   Histórico de pedidos
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
+          {/* Minhas Conversas */}
+          <TouchableOpacity 
+            className="flex-row items-center py-4 border-b border-gray-100"
+            onPress={() => (navigation as any).navigate('ConversasEstabelecimento')}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-blue-50 items-center justify-center mr-4">
+                <Ionicons name="chatbubbles" size={20} color="#3b82f6" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-base font-semibold text-gray-900 mb-1">
+                  Minhas Conversas
+                </Text>
+                <Text className="text-sm text-gray-500">
+                  Chat com estabelecimentos
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
+          </TouchableOpacity>
+
+          {/* Notificações */}
+          <TouchableOpacity 
+            className="flex-row items-center py-4"
+            onPress={() => (navigation as any).navigate('Notificacoes')}
+            activeOpacity={0.7}
+          >
+            <View className="flex-row items-center flex-1">
+              <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center mr-4 relative">
+                <Ionicons name="notifications" size={20} color="#ea1d2c" />
+                {notificacoesNaoLidas > 0 && (
+                  <View className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 items-center justify-center border-2 border-white">
+                    <Text className="text-white text-xs font-bold">
+                      {notificacoesNaoLidas > 99 ? '99+' : notificacoesNaoLidas}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-base font-semibold text-gray-900">
+                    Notificações
+                  </Text>
+                  {notificacoesNaoLidas > 0 && (
+                    <View className="bg-red-500 px-2 py-0.5 rounded-full">
+                      <Text className="text-white text-xs font-bold">
+                        {notificacoesNaoLidas}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text className="text-sm text-gray-500">
+                  Ver todas as notificações
                 </Text>
               </View>
             </View>
@@ -257,7 +335,5 @@ const PerfilScreen: React.FC = () => {
     </SafeAreaView>
   );
 };
-
-export default PerfilScreen;
 
 export default PerfilScreen;

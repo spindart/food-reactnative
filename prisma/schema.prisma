@@ -39,7 +39,9 @@ model Usuario {
   addresses        Address[]
   cartoes          Cartao[]
   mensagens        Mensagem[]        @relation("UsuarioMensagens")
+  notificacoes    Notificacao[]     @relation("UsuarioNotificacoes")
   mercadoPagoCustomerId String?       @unique // ID do customer no MercadoPago
+  expoPushToken   String?            // Token do Expo Push Notifications
   createdAt        DateTime?         @default(now())
   updatedAt        DateTime?         @updatedAt
 }
@@ -121,6 +123,7 @@ model Pedido {
   
   // Campo para taxa de entrega
   taxaEntrega         Float?       // taxa de entrega aplicada no pedido
+  notificacoes        Notificacao[]
 }
 
 model ItemPedido {
@@ -191,6 +194,7 @@ enum Role {
 enum Status {
   pendente
   preparo
+  em_entrega
   entregue
   cancelado
 }
@@ -223,4 +227,29 @@ enum MensagemStatus {
   enviado
   recebido
   lido
+}
+
+model Notificacao {
+  id          Int       @id @default(autoincrement())
+  usuarioId  Int
+  usuario    Usuario   @relation("UsuarioNotificacoes", fields: [usuarioId], references: [id])
+  tipo       TipoNotificacao
+  titulo     String
+  mensagem   String
+  data       DateTime? // Dados adicionais em JSON (ex: pedidoId, link, etc)
+  lida       Boolean   @default(false)
+  lidaEm     DateTime?
+  createdAt  DateTime  @default(now())
+  
+  // Campos opcionais para relacionamentos
+  pedidoId   Int?
+  pedido     Pedido?   @relation(fields: [pedidoId], references: [id])
+}
+
+enum TipoNotificacao {
+  STATUS_PEDIDO
+  MENSAGEM_RESTAURANTE
+  PROMOCAO_CUPOM
+  AVISO_IMPORTANTE
+  EVENTO_SISTEMA
 }

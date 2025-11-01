@@ -22,21 +22,91 @@ import PixPaymentConfirmationScreen from './screens/PixPaymentConfirmationScreen
 import ChatScreen from './screens/ChatScreen';
 import ChatEstabelecimentoScreen from './screens/ChatEstabelecimentoScreen';
 import ConversasEstabelecimentoScreen from './screens/ConversasEstabelecimentoScreen';
+import NotificacoesScreen from './screens/NotificacoesScreen';
 import * as Notifications from 'expo-notifications';
 import { CartProvider, useCart } from './context/CartContext';
+import api from './services/api';
+import Constants from 'expo-constants';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Configurar handler de notificações
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
 const registerForPushNotifications = async () => {
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== 'granted') {
-    alert('Permissão para notificações foi negada.');
-    return;
+  try {
+    // Verificar se está rodando no Expo Go (push notifications não funcionam no Expo Go SDK 53+)
+    const isExpoGo = Constants.executionEnvironment === 'storeClient';
+    
+    if (isExpoGo) {
+      console.log('⚠️ Push notifications não funcionam no Expo Go (SDK 53+)');
+      console.log('ℹ️ Use um development build para testar push notifications:');
+      console.log('   1. Execute: npx expo install expo-dev-client');
+      console.log('   2. Execute: npx expo run:android ou npx expo run:ios');
+      console.log('   3. Ou use: eas build --profile development');
+      return;
+    }
+
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('⚠️ Permissão para notificações foi negada.');
+      return;
+    }
+    
+    // Tentar obter token (requer projectId configurado no app.json)
+    try {
+      // Obter projectId do app.json ou Constants
+      const extra = Constants.expoConfig?.extra as any;
+      const projectId = extra?.eas?.projectId || extra?.projectId;
+
+      if (!projectId) {
+        console.log('⚠️ ProjectId não configurado. Push notifications podem não funcionar.');
+        console.log('ℹ️ Execute: eas init (após fazer login com: eas login)');
+        return;
+      }
+
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: projectId as string,
+      });
+      const token = tokenData.data;
+      console.log('📱 Token de notificação obtido:', token.substring(0, 30) + '...');
+      
+      // Enviar o token para o backend
+      try {
+        await api.post('/notificacoes/token', { token });
+        console.log('✅ Token enviado para o backend com sucesso');
+      } catch (apiError: any) {
+        console.error('⚠️ Erro ao enviar token para o backend:', apiError.message);
+        // Não falha se não conseguir enviar o token
+      }
+    } catch (tokenError: any) {
+      // Tratar erro de Experience not found
+      if (tokenError.message?.includes('EXPERIENCE_NOT_FOUND') || 
+          tokenError.message?.includes('Experience with id')) {
+        console.log('⚠️ O projectId configurado não existe no Expo.');
+        console.log('ℹ️ Para criar um projectId válido:');
+        console.log('   1. Execute: eas login (ou crie conta em https://expo.dev)');
+        console.log('   2. Execute: eas init');
+        console.log('   3. Isso criará um projectId válido automaticamente');
+      } else if (tokenError.message?.includes('projectId')) {
+        console.log('ℹ️ Configure o projectId no app.json');
+        console.log('   Execute: eas init (após fazer login)');
+      } else {
+        console.error('❌ Erro ao obter token:', tokenError.message);
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao registrar notificações:', error);
   }
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
-  console.log('Token de notificação:', token);
-  // Enviar o token para o backend
 };
 
 function MainTabs() {
@@ -119,6 +189,8 @@ export default function App() {
           <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChatEstabelecimento" component={ChatEstabelecimentoScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ConversasEstabelecimento" component={ConversasEstabelecimentoScreen} options={{ title: 'Conversas' }} />
+          {/* Notificações */}
+          <Stack.Screen name="Notificacoes" component={NotificacoesScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

@@ -296,6 +296,7 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
     switch (status) {
       case 'pendente': return '#FF6B35';
       case 'preparo': return '#FFA726';
+      case 'em_entrega': return '#2196F3';
       case 'entregue': return '#4CAF50';
       case 'cancelado': return '#F44336';
       default: return '#9E9E9E';
@@ -306,6 +307,7 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
     switch (status) {
       case 'pendente': return 'Pendente';
       case 'preparo': return 'Em Preparo';
+      case 'em_entrega': return 'Saiu para Entrega';
       case 'entregue': return 'Entregue';
       case 'cancelado': return 'Cancelado';
       default: return status;
@@ -331,7 +333,7 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
   // Filtrar por aba
   const pedidosFiltrados = pedidos.filter((p) =>
     activeTab === 'pedidos'
-      ? (p.status === 'pendente' || p.status === 'preparo')
+      ? (p.status === 'pendente' || p.status === 'preparo' || p.status === 'em_entrega')
       : (p.status === 'entregue' || p.status === 'cancelado')
   );
 
@@ -439,6 +441,8 @@ const PedidosDoEstabelecimentoScreen: React.FC = () => {
                     : item.status === 'pendente'
                     ? '🍳 Avançar para Preparo'
                     : item.status === 'preparo'
+                    ? '🚗 Avançar para Entrega'
+                    : item.status === 'em_entrega'
                     ? '✅ Marcar como Entregue'
                     : '✅ Finalizado'}
                 </Text>

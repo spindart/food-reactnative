@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { ChatService } from '../services/chat.service';
 import { NotificationService } from '../services/notification.service';
+import { NotificationDBService } from '../services/notification-db.service';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -152,6 +153,33 @@ export class ChatController {
 
       // Notifica via WebSocket
       NotificationService.notifyChatMessage(pedidoIdNum, mensagem);
+
+      // Criar notificação se mensagem for do estabelecimento para o cliente
+      if (mensagem.isFromEstabelecimento) {
+        try {
+          const pedidoCompleto = await prisma.pedido.findUnique({
+            where: { id: pedidoIdNum },
+            include: {
+              estabelecimento: {
+                select: {
+                  nome: true,
+                },
+              },
+            },
+          });
+
+          if (pedidoCompleto) {
+            await NotificationDBService.notificarMensagemRestaurante(
+              pedidoCompleto.clienteId,
+              pedidoIdNum,
+              pedidoCompleto.estabelecimento.nome
+            );
+          }
+        } catch (notifError) {
+          console.error('Erro ao criar notificação de mensagem:', notifError);
+          // Não falha o envio da mensagem se a notificação falhar
+        }
+      }
 
       res.status(201).json(mensagem);
     } catch (error: any) {
