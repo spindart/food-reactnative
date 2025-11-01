@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, FlatList, Text, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
+import { View, FlatList, Text, ActivityIndicator, TouchableOpacity, Modal, ScrollView, Image, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import api from '../services/api';
@@ -35,15 +35,18 @@ const PedidoListScreen: React.FC = () => {
   const [selectedPedido, setSelectedPedido] = useState<Pedido | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [pedidoAvaliado, setPedidoAvaliado] = useState<boolean>(false);
   const [avaliacaoModalVisible, setAvaliacaoModalVisible] = useState(false);
   const [pedidoParaAvaliar, setPedidoParaAvaliar] = useState<Pedido | null>(null);
 
-  const fetchPedidos = async () => {
+  const fetchPedidos = async (isRefresh: boolean = false) => {
     try {
       console.log('🔄 Iniciando busca de pedidos...');
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
       setError(null);
       
       const user = await getCurrentUser();
@@ -93,7 +96,13 @@ const PedidoListScreen: React.FC = () => {
       setError(errorMessage);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPedidos(true);
   };
 
   useFocusEffect(
@@ -211,6 +220,14 @@ const PedidoListScreen: React.FC = () => {
   return (
     <View className="flex-1 bg-gray-100">
       <FlatList
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#ea1d2c']}
+            tintColor="#ea1d2c"
+          />
+        }
         data={pedidos.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16 }}

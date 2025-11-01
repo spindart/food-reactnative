@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, FlatList, Text, ActivityIndicator, Animated } from 'react-native';
+import { View, FlatList, Text, ActivityIndicator, Animated, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { getAllEstabelecimentos } from '../services/estabelecimentoService';
@@ -15,25 +15,39 @@ const EstabelecimentoListScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [estabelecimentos, setEstabelecimentos] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoria, setCategoria] = useState<string>('');
   const [produtos, setProdutos] = useState<Produto[]>([]);
 
+  const fetchEstabelecimentos = async () => {
+    try {
+      setError(null);
+      const data = await getAllEstabelecimentos();
+      setEstabelecimentos(data);
+    } catch (err) {
+      setError('Erro ao carregar os estabelecimentos.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchEstabelecimentos = async () => {
-      try {
-        const data = await getAllEstabelecimentos();
-        setEstabelecimentos(data);
-      } catch (err) {
-        setError('Erro ao carregar os estabelecimentos.');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchEstabelecimentos();
   }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Recarregar estabelecimentos, categorias e produtos
+    await Promise.all([
+      fetchEstabelecimentos(),
+      getCategorias().then(setCategorias).catch(() => {}),
+      getAllProdutos().then(setProdutos).catch(() => {}),
+    ]);
+  };
 
 
   const handleViewProducts = (estabelecimento: any) => {
@@ -118,6 +132,14 @@ const EstabelecimentoListScreen: React.FC = () => {
       </View>
 
       <Animated.FlatList
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#ea1d2c']}
+            tintColor="#ea1d2c"
+          />
+        }
         ListHeaderComponent={
           <View>
             <BannerCarousel />
