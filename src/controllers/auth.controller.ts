@@ -30,18 +30,40 @@ export class AuthController {
         }
       }
 
+      // Limpar CPF e telefone (remover formatação se houver)
+      const cpfLimpo = cpf ? cpf.replace(/\D/g, '') : null;
+      const telefoneLimpo = telefone ? telefone.replace(/\D/g, '') : null;
+
+      console.log('📝 Registrando usuário:', {
+        nome,
+        email,
+        cpf: cpfLimpo,
+        telefone: telefoneLimpo,
+      });
+
       const hashed = await bcrypt.hash(senha, 10);
       const usuario = await prisma.usuario.create({
         data: { 
           nome, 
           email, 
           senha: hashed, 
-          cpf: cpf || null,
-          telefone: telefone || null,
+          cpf: cpfLimpo || null,
+          telefone: telefoneLimpo || null,
           telefoneVerificado: false, // Será verificado via WhatsApp
+          emailVerificado: false,
+          cpfVerificado: false,
           role: role || 'cliente'
         },
       });
+
+      console.log('✅ Usuário criado:', {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        cpf: usuario.cpf,
+        telefone: usuario.telefone,
+      });
+
       res.status(201).json({ 
         id: usuario.id, 
         nome: usuario.nome, 
@@ -63,26 +85,41 @@ export class AuthController {
 
   static async login(req: Request, res: Response): Promise<void> {
     try {
+      console.log('📥 Login request body:', JSON.stringify(req.body, null, 2));
       const { email, senha } = req.body;
+      
+      if (!email || !senha) {
+        console.error('❌ Email ou senha ausentes');
+        res.status(400).json({ error: 'E-mail e senha são obrigatórios' });
+        return;
+      }
+      
       const usuario = await prisma.usuario.findUnique({ where: { email } });
       if (!usuario) {
+        console.error('❌ Usuário não encontrado:', email);
         res.status(401).json({ error: 'Credenciais inválidas' });
         return;
       }
+      
       const valid = await bcrypt.compare(senha, usuario.senha);
       if (!valid) {
+        console.error('❌ Senha inválida para:', email);
         res.status(401).json({ error: 'Credenciais inválidas' });
         return;
       }
+      
       const token = jwt.sign({ 
         id: usuario.id, 
         nome: usuario.nome,
         email: usuario.email,
         role: usuario.role 
       }, JWT_SECRET, { expiresIn: '1d' });
+      
+      console.log('✅ Login bem-sucedido para:', email);
       res.json({ token });
-    } catch (error) {
-      res.status(400).json({ error: 'Erro ao autenticar', details: error });
+    } catch (error: any) {
+      console.error('❌ Erro ao autenticar:', error);
+      res.status(500).json({ error: 'Erro ao autenticar', details: error.message });
     }
   }
 }

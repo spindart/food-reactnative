@@ -61,17 +61,45 @@ export const usuarioLoginSchema = z.object({
 // Middleware genérico para validação Zod
 export function validateBody(schema: z.ZodSchema<any>) {
   return (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
-    const result = schema.safeParse(req.body);
-    if (!result.success) {
-      res.status(400).json({ error: 'Dados inválidos', details: result.error.errors });
+    try {
+      const result = schema.safeParse(req.body);
+      if (!result.success) {
+        console.error('Erro de validação:', result.error.errors);
+        res.status(400).json({ error: 'Dados inválidos', details: result.error.errors });
+        return;
+      }
+      req.body = result.data;
+      next();
+    } catch (error: any) {
+      console.error('Erro no middleware de validação:', error);
+      res.status(500).json({ error: 'Erro interno na validação', details: error.message });
       return;
     }
-    req.body = result.data;
-    next();
   };
 }
 
 // Schema simples para alternar flag "aberto"
 export const abertoSchema = z.object({
   aberto: z.boolean(),
+});
+
+// Schema para atualização de perfil
+export const updateProfileSchema = z.object({
+  nome: z.string().min(1, 'Nome é obrigatório').optional(),
+  email: z.string().email('E-mail inválido').optional(),
+  telefone: z.string().optional().nullable(),
+  cpf: z.string().optional().nullable(),
+  dataNascimento: z.string().optional().nullable(),
+  genero: z.enum(['masculino', 'feminino', 'outro', 'prefiro_não_informar']).optional().nullable(),
+  fotoPerfil: z.string().optional().nullable(),
+});
+
+// Schema para alteração de senha
+export const alterarSenhaSchema = z.object({
+  senhaAtual: z.string().min(1, 'Senha atual é obrigatória'),
+  novaSenha: z.string().min(6, 'A nova senha deve ter pelo menos 6 caracteres'),
+  confirmarSenha: z.string().min(1, 'Confirmação de senha é obrigatória'),
+}).refine((data) => data.novaSenha === data.confirmarSenha, {
+  message: 'A nova senha e a confirmação não coincidem',
+  path: ['confirmarSenha'],
 });

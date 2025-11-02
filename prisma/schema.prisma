@@ -30,8 +30,13 @@ model Usuario {
   email            String            @unique
   senha            String
   cpf              String?           @unique // CPF do usuário
+  cpfVerificado    Boolean           @default(false) // Indica se o CPF foi verificado
   telefone         String?           // Telefone/WhatsApp do usuário
   telefoneVerificado Boolean         @default(false) // Indica se o telefone foi verificado
+  emailVerificado  Boolean           @default(false) // Indica se o e-mail foi verificado
+  dataNascimento   DateTime?         // Data de nascimento
+  genero           String?           // Gênero (masculino, feminino, outro, prefiro_não_informar)
+  fotoPerfil       String?           // URL ou base64 da foto de perfil
   role             Role
   avaliacoes       Avaliacao[]
   estabelecimentos Estabelecimento[] @relation("UsuarioEstabelecimentos")
