@@ -213,13 +213,21 @@ export class EstabelecimentoController {
       }
       const estabelecimentos = await prisma.estabelecimento.findMany({
         where: { donoId: user.id },
-        include: { categorias: true }, // Garante que imagem seja incluída
+        include: { categorias: true },
+        // Não incluir marketplaceFeeTransactions para evitar erro se tabela não existir
       });
       // Prisma já retorna o campo imagem se ele existir no schema e no banco
       res.json(estabelecimentos);
       return;
-    } catch (error) {
-      res.status(500).json({ error: 'Erro ao buscar estabelecimentos do dono', details: error });
+    } catch (error: any) {
+      console.error('❌ Erro detalhado ao buscar estabelecimentos:', error);
+      console.error('❌ Mensagem:', error.message);
+      console.error('❌ Código:', error.code);
+      res.status(500).json({ 
+        error: 'Erro ao buscar estabelecimentos do dono', 
+        details: error.message,
+        code: error.code,
+      });
       return;
     }
   }

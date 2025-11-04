@@ -75,6 +75,15 @@ model Estabelecimento {
   // Configuração de frete grátis
   freteGratisAtivado      Boolean  @default(false)
   valorMinimoFreteGratis  Float?
+  
+  // Campos de Marketplace Mercado Pago
+  mercadoPagoCollectorId  String?  @unique // ID da conta do seller no Mercado Pago (collector_id)
+  mercadoPagoAccessToken  String?  // Access token do seller (criptografado)
+  mercadoPagoRefreshToken String?  // Refresh token do seller (criptografado)
+  mercadoPagoConnected    Boolean  @default(false) // Indica se a conta está conectada
+  mercadoPagoConnectedAt   DateTime? // Data de conexão da conta
+  applicationFeePercent   Float    @default(12.0) // Taxa padrão de comissão (%)
+  marketplaceFeeTransactions MarketplaceFee[] // Histórico de taxas cobradas
 }
 
 model Produto {
@@ -125,6 +134,12 @@ model Pedido {
   
   // Campo para taxa de entrega
   taxaEntrega         Float?       // taxa de entrega aplicada no pedido
+  
+  // Campos de Marketplace/Split Payment
+  applicationFeeAmount Float?       // Valor da comissão cobrada (application_fee)
+  sellerAmount        Float?       // Valor repassado ao seller (após desconto da taxa)
+  splitPayment        Boolean      @default(false) // Indica se o pagamento foi feito com split
+  
   notificacoes        Notificacao[]
 }
 
@@ -259,4 +274,24 @@ enum TipoNotificacao {
   AVISO_IMPORTANTE
   EVENTO_SISTEMA
   AVALIAR_PEDIDO
+}
+
+// Tabela para armazenar histórico de fees/transações do marketplace
+model MarketplaceFee {
+  id                Int            @id @default(autoincrement())
+  pedidoId          Int?           // ID do pedido relacionado (opcional)
+  estabelecimentoId  Int
+  estabelecimento   Estabelecimento @relation(fields: [estabelecimentoId], references: [id])
+  paymentId         String          @unique // ID do pagamento no Mercado Pago (único)
+  transactionAmount Float          // Valor total da transação
+  applicationFee    Float          // Taxa cobrada (application_fee)
+  sellerAmount      Float          // Valor repassado ao seller
+  feePercent        Float          // Percentual da taxa aplicada
+  status            String          // Status da transação (approved, pending, refunded, etc)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  @@index([estabelecimentoId])
+  @@index([paymentId])
+  @@index([pedidoId])
 }

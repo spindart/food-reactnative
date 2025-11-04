@@ -21,4 +21,5 @@ export type RootStackParamList = {
   FormaPagamento: undefined;
   RevisarPedido: undefined;
   PixPaymentConfirmation: undefined;
+  ConfigurarMercadoPago: { estabelecimento: { id: number | string; nome: string } };
 };

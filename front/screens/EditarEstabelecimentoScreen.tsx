@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { updateEstabelecimento, Estabelecimento } from '../services/estabelecimentoService';
 import { Snackbar } from 'react-native-paper';
 import { getCategorias, Categoria } from '../services/categoriaService';
@@ -265,6 +266,16 @@ const EditarEstabelecimentoScreen: React.FC = () => {
             </TouchableOpacity>
           ))}
         </View>
+        
+        {/* Botão de Configuração do Mercado Pago */}
+        <TouchableOpacity
+          style={[styles.button, styles.mercadoPagoButton]}
+          onPress={() => navigation.navigate('ConfigurarMercadoPago', { estabelecimento })}
+        >
+          <Ionicons name="card" size={20} color="#fff" />
+          <Text style={styles.buttonText}>Configurar Mercado Pago</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? 'Salvando...' : 'Salvar'}</Text>
         </TouchableOpacity>
@@ -284,7 +295,8 @@ const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'flex-start', padding: 16, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 24 },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 4, padding: 12, marginBottom: 8 },
-  button: { backgroundColor: '#007BFF', padding: 12, borderRadius: 4, alignItems: 'center', marginBottom: 16 },
+  button: { backgroundColor: '#007BFF', padding: 12, borderRadius: 4, alignItems: 'center', marginBottom: 16, flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  mercadoPagoButton: { backgroundColor: '#009EE3' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
 
