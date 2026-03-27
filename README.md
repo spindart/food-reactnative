@@ -29,7 +29,7 @@ This is a full-stack food delivery application with a **React Native** frontend 
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/spindart/food-reactnative/
    cd food
    ```
 
