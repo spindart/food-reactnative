@@ -68,13 +68,18 @@ The backend will be available at `http://localhost:3000`.
    ```bash
    npm install
    ```
+   
+3. Run expo android:
+   ```bash
+   npx expo run:android
+   ```
 
-3. Start the Expo development server:
+4. Start the Expo development server:
    ```bash
    npm run start
    ```
 
-4. Follow the instructions in the terminal to open the app on your device or emulator.
+5. Follow the instructions in the terminal to open the app on your device or emulator.
 
 ## Docker Setup
 
